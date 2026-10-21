@@ -19,8 +19,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
       - name: Install locked runtime dependencies
@@ -30,9 +32,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          & $compiler /nologo /optimize+ /platform:anycpu /target:exe /out:plugin/AudioSwitch.exe plugin/AudioSwitch.cs
-          if ($LASTEXITCODE -ne 0) { throw 'AudioSwitch compilation failed' }
-          if (!(Test-Path plugin/AudioSwitch.exe)) { throw 'Compiled helper missing' }
+          Push-Location plugin
+          try {
+            & $compiler /nologo /optimize+ /platform:anycpu /target:exe /out:AudioSwitch.exe AudioSwitch.cs
+            if ($LASTEXITCODE -ne 0) { throw 'AudioSwitch compilation failed' }
+            if (!(Test-Path AudioSwitch.exe)) { throw 'Compiled helper missing' }
+          } finally { Pop-Location }
       - name: Validate JavaScript and run regression tests
         shell: pwsh
         run: |
@@ -47,7 +52,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Packaging validation failed' }
           }
       - name: Upload build and complete sources for reproducibility
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: AudioSwitch-Windows-build
           path: |
