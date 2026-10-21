@@ -15,7 +15,7 @@ function nativeHelper(args) {
             try { result = JSON.parse((stdout || '').replace(/^\uFEFF/, '').trim()); }
             catch { return reject(new Error(error ? `Audio helper failed: ${error.code || error.message}` : 'Invalid response from AudioSwitch.exe')); }
             if (!result || typeof result !== 'object') return reject(new Error('Invalid audio helper result'));
-            if (error || result.success === false || result.error) return reject(new Error(result.error || error.message));
+            if (error || result.success === false || result.error) return reject(new Error(result.error || error?.message || 'Audio command failed'));
             resolve(result);
         });
     });
@@ -51,7 +51,7 @@ function createController({helper = nativeHelper, send, image, log = () => {}, d
             const active = snapshot[s.deviceType + (s.roles === 'communications' ? 'Comm' : '')];
             const index = s.devices.findIndex(d => d.id === active?.id), device = s.devices[index];
             const icon = s.deviceType === 'input' || device?.icon === 'microphone' ? 'mic_device1' : device?.icon === 'headphones' ? 'device2' : 'device1';
-            const title = !s.showDeviceName ? null : active ? `${index < 0 ? '—' : (index + 1) + '/' + s.devices.length}\n${device?.label || device?.name || active.name}` : '—';
+            const title = !s.showDeviceName ? '' : active ? `${index < 0 ? '—' : (index + 1) + '/' + s.devices.length}\n${device?.label || device?.name || active.name}` : '—';
             paint(context, icon, 0, title);
         } else if (action === 'mute') {
             const active = snapshot[s.muteType === 'microphone' ? 'input' : 'output'];
@@ -129,7 +129,7 @@ function createController({helper = nativeHelper, send, image, log = () => {}, d
         const {event, context, action, device} = data, payload = data.payload || {};
         if (event === 'deviceDidDisconnect') {
             for (const [key, record] of contexts) if (record.device === device) {
-                try { await release(key); } finally { contexts.delete(key); rendered.delete(key); }
+                try { await release(key); } catch (e) { fail(key, e); } finally { contexts.delete(key); rendered.delete(key); }
             }
             return;
         }
@@ -163,7 +163,7 @@ function createController({helper = nativeHelper, send, image, log = () => {}, d
             if (stopped || pollPending || (!releases.size && ![...contexts.values()].some(r => r.visible))) return Promise.resolve();
             pollPending = true;
             return enqueue(async () => {
-                for (const key of [...held.keys()]) if (releases.has(key) || !contexts.get(key)?.visible) await release(key);
+                for (const key of [...held.keys()]) if (releases.has(key) || !contexts.get(key)?.visible) { try { await release(key); } catch (e) { fail(key, e); } }
                 await refresh();
             }).finally(() => { pollPending = false; });
         },

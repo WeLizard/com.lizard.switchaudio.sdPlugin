@@ -21,9 +21,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
-      - name: Refresh exact ws pin for reviewed dependency update
-        working-directory: plugin
-        run: npm install --package-lock-only --ignore-scripts
       - name: Install locked runtime dependencies
         working-directory: plugin
         run: npm ci --omit=dev --ignore-scripts
