@@ -1,663 +1,208 @@
-const WebSocket = require('ws');
-const { exec, execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+'use strict';
+const {execFile} = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const S = require('./settings');
+const PREFIX = 'com.lizard.switchaudio.';
 
-const pluginDir = __dirname;
-const helperPath = path.join(pluginDir, 'AudioSwitch.exe');
-const nircmdPath = path.join(pluginDir, 'nircmd.exe');
-
-let ws;
-let buttonContexts = {};
-
-// Store action UUIDs for routing
-let actionUUIDs = {};
-
-// Check which tools are available
-const hasHelper = fs.existsSync(helperPath);
-const hasNircmd = fs.existsSync(nircmdPath);
-
-// Get list of audio devices
-function getAudioDevices(deviceType = 'output') {
-    return new Promise((resolve) => {
-        if (hasHelper) {
-            // Use C# helper (best option)
-            exec(`"${helperPath}" list ${deviceType}`, { encoding: 'utf8' }, (err, stdout) => {
-                if (err) {
-                    fallbackGetDevices(resolve);
-                    return;
-                }
-                try {
-                    const devices = JSON.parse(stdout.trim());
-                    if (devices.error) {
-                        fallbackGetDevices(resolve);
-                        return;
-                    }
-                    resolve(devices);
-                } catch (e) {
-                    fallbackGetDevices(resolve);
-                }
-            });
-        } else {
-            fallbackGetDevices(resolve);
-        }
-    });
-}
-
-// Fallback: use PowerShell to get device list
-function fallbackGetDevices(resolve) {
-    const ps = `
-        Add-Type -AssemblyName System.Runtime.InteropServices
-        $devices = Get-CimInstance Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' } | Select-Object Name
-        $result = @()
-        foreach ($d in $devices) {
-            $result += @{ name = $d.Name; id = $d.Name }
-        }
-        $result | ConvertTo-Json -Compress
-    `;
-
-    exec(`powershell -Command "${ps.replace(/\n/g, ' ')}"`, { encoding: 'utf8' }, (err, stdout) => {
-        if (err) {
-            resolve([]);
-            return;
-        }
-        try {
-            let devices = JSON.parse(stdout.trim());
-            if (!Array.isArray(devices)) devices = [devices];
-            resolve(devices.map(d => ({ id: d.id || d.name, name: d.name })));
-        } catch (e) {
-            resolve([]);
-        }
-    });
-}
-
-// Switch audio device (sets BOTH Default and Communication)
-function switchDevice(deviceId, deviceName, deviceType = 'output') {
-    return new Promise((resolve) => {
-        if (hasHelper) {
-            // Use C# helper (sets all roles: Console, Multimedia, Communications)
-            exec(`"${helperPath}" set "${deviceId}" ${deviceType}`, { encoding: 'utf8' }, (err, stdout) => {
-                if (err) {
-                    fallbackSwitch(deviceName, resolve, deviceType);
-                    return;
-                }
-                try {
-                    const result = JSON.parse(stdout.trim());
-                    if (result.success) {
-                        resolve(true);
-                    } else {
-                        fallbackSwitch(deviceName, resolve, deviceType);
-                    }
-                } catch (e) {
-                    fallbackSwitch(deviceName, resolve, deviceType);
-                }
-            });
-        } else {
-            fallbackSwitch(deviceName, resolve, deviceType);
-        }
-    });
-}
-
-// Fallback: use nircmd to switch devices
-function fallbackSwitch(deviceName, resolve, deviceType = 'output') {
-    if (hasNircmd) {
-        // nircmd setdefaultsounddevice "Device Name" {Role}
-        // Role: 0 = Console (default), 1 = Multimedia), 2 = Communications
-        // Works for both input and output devices - just use correct device name
-        // Set all three roles: Console (0), Multimedia (1), Communications (2)
-        const cmd = `"${nircmdPath}" setdefaultsounddevice "${deviceName}" 0 && "${nircmdPath}" setdefaultsounddevice "${deviceName}" 1 && "${nircmdPath}" setdefaultsounddevice "${deviceName}" 2`;
-        exec(cmd, (err) => {
-            if (err) {
-                resolve(false);
-            } else {
-                resolve(true);
-            }
-        });
-    } else {
-        resolve(false);
-    }
-}
-
-function send(data) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-    }
-}
-
-function setState(context, state) {
-    send({
-        event: 'setState',
-        context: context,
-        payload: { state: state }
-    });
-}
-
-function setSettings(context, settings) {
-    send({
-        event: 'setSettings',
-        context: context,
-        payload: settings
-    });
-}
-
-function setImage(context, imagePath) {
-    send({
-        event: 'setImage',
-        context: context,
-        payload: { image: imagePath }
-    });
-}
-
-// Update mute button icon based on muteType
-function updateMuteIcon(context, settings) {
-    const muteType = settings.muteType || 'system';
-    const currentState = settings.currentState || 0;
-    
-    if (muteType === 'microphone') {
-        // Use microphone icons
-        const imagePath = currentState === 0 ? 'images/mic_unmute' : 'images/mic_mute';
-        setImage(context, imagePath);
-    } else {
-        // Use system/speaker icons (device icons)
-        const imagePath = currentState === 0 ? 'images/dev_unmute' : 'images/dev_mute';
-        setImage(context, imagePath);
-    }
-}
-
-// Update device switch button icon based on deviceType
-function updateDeviceIcon(context, settings) {
-    const deviceType = settings.deviceType || 'output';
-    const currentState = settings.currentState || 0;
-
-    if (deviceType === 'input') {
-        // Use microphone device icons
-        const imagePath = currentState === 0 ? 'images/mic_device1' : 'images/mic_device2';
-        setImage(context, imagePath);
-    } else {
-        // Use output device icons
-        const imagePath = currentState === 0 ? 'images/device1' : 'images/device2';
-        setImage(context, imagePath);
-    }
-}
-
-// Update play/pause button icon based on current state
-function updatePlayIcon(context, settings) {
-    const currentState = settings.currentState || 0;
-    // State 0 = paused (show play icon), State 1 = playing (show pause icon)
-    const imagePath = currentState === 0 ? 'images/play' : 'images/pause';
-    setImage(context, imagePath);
-}
-
-// Update set volume button icon based on target volume
-function updateVolumeIcon(context, settings) {
-    const targetVolume = settings.targetVolume !== undefined ? settings.targetVolume : 50;
-
-    // Select icon based on volume level
-    let iconName;
-    if (targetVolume === 0) {
-        iconName = 'volume_0';
-    } else if (targetVolume <= 25) {
-        iconName = 'volume_25';
-    } else if (targetVolume <= 50) {
-        iconName = 'volume_50';
-    } else if (targetVolume <= 75) {
-        iconName = 'volume_75';
-    } else {
-        iconName = 'volume_100';
-    }
-
-    setImage(context, `images/${iconName}`);
-}
-
-// Execute NirCmd command (returns Promise)
-function executeNircmd(command) {
-    return new Promise((resolve) => {
-        if (!hasNircmd) {
-            resolve(false);
-            return;
-        }
-        const fullCommand = `"${nircmdPath}" ${command}`;
-        exec(fullCommand, { encoding: 'utf8', timeout: 5000 }, (err) => {
-            if (err) {
-                resolve(false);
-            } else {
-                resolve(true);
-            }
+// No shell interpolation, external utilities or runtime downloads.
+function nativeHelper(args) {
+    return new Promise((resolve, reject) => {
+        execFile(path.join(__dirname, 'AudioSwitch.exe'), args.map(String), {
+            encoding: 'utf8', windowsHide: true, timeout: 8000, maxBuffer: 1024 * 1024
+        }, (error, stdout) => {
+            let result;
+            try { result = JSON.parse((stdout || '').replace(/^\uFEFF/, '').trim()); }
+            catch { return reject(new Error(error ? `Audio helper failed: ${error.code || error.message}` : 'Invalid response from AudioSwitch.exe')); }
+            if (!result || typeof result !== 'object') return reject(new Error('Invalid audio helper result'));
+            if (error || result.success === false || result.error) return reject(new Error(result.error || error.message));
+            resolve(result);
         });
     });
 }
 
-// Handle mute/unmute toggle (System or Microphone)
-async function handleMuteToggle(context, settings) {
-    const currentState = settings.currentState || 0;
-    const newState = currentState === 0 ? 1 : 0;
-    const muteType = settings.muteType || 'system';
-    
-    let command;
-    if (muteType === 'microphone') {
-        // Use mutesysvolume for microphone with default_record component
-        // Format: mutesysvolume [action] {Component}
-        // action: 2 = toggle
-        // Component: default_record = default recording device (microphone)
-        // This is more reliable than mutesubunitvolume which requires exact device/subunit names
-        command = `mutesysvolume 2 default_record`;
-    } else {
-        // Use mutesysvolume for system (output/playback)
-        // Format: mutesysvolume [action] {Component}
-        // action: 2 = toggle
-        // Component: default is 'master' (master volume)
-        // This mutes/unmutes the default playback device
-        command = `mutesysvolume 2`;
-    }
-    
-    const success = await executeNircmd(command);
-    
-    if (success) {
-        // After toggle, update our state tracking
-        settings.currentState = newState;
-        setSettings(context, settings);
-        setState(context, newState);
-        // Update icon based on muteType and new state
-        updateMuteIcon(context, settings);
-        buttonContexts[context] = settings;
-    }
-}
-
-// Handle volume up/down
-async function handleVolumeChange(context, settings, direction) {
-    // direction: 'up' or 'down'
-    // Default volume change: 3000 units (out of 65535, roughly 4.5%)
-    const volumeChange = settings.volumeStep || 3000;
-    const change = direction === 'up' ? volumeChange : -volumeChange;
-    
-    await executeNircmd(`changesysvolume ${change}`);
-}
-
-// Handle app volume change
-async function handleAppVolumeChange(context, settings, direction) {
-    // direction: 'up' or 'down'
-    // Default volume change: 0.1 (10%)
-    const volumeChange = settings.appVolumeStep || 0.1;
-    const change = direction === 'up' ? volumeChange : -volumeChange;
-    
-    // If processName is specified, use C# helper to control volume by process name
-    // Otherwise, we cannot reliably control volume without process name
-    if (settings.processName && settings.processName.trim()) {
-        const processName = settings.processName.trim().replace(/\.exe$/i, '');
-        const success = await changeAppVolumeByProcess(processName, change);
-        if (!success) {
-            // Fallback to NirCmd "focused" if C# helper fails
-            await executeNircmd(`changeappvolume focused ${change}`);
+function createController({helper = nativeHelper, send, image, log = () => {}, delay = ms => new Promise(r => setTimeout(r, ms))}) {
+    const contexts = new Map(), held = new Map(), rendered = new Map(), releases = new Set();
+    let tail = Promise.resolve(), pollPending = false, stopped = false;
+    const emit = (event, context, payload, action) => send({event, context, ...(payload === undefined ? {} : {payload}), ...(action ? {action} : {})});
+    function fail(context, error, action) {
+        const message = error instanceof Error ? error.message : String(error);
+        log(message); if (context) {
+            emit('showAlert', context);
+            emit('sendToPropertyInspector', context, {error: message}, action || contexts.get(context)?.action);
         }
-    } else {
-        // No process name specified - cannot reliably control app volume
-        // Fallback to NirCmd "focused" (only works if app is in focus)
-        await executeNircmd(`changeappvolume focused ${change}`);
     }
-}
-
-// Change app volume by process name using C# helper and Core Audio API
-function changeAppVolumeByProcess(processName, volumeChange) {
-    return new Promise((resolve) => {
-        if (hasHelper) {
-            // Use C# helper (Core Audio API) - works even if app is not in focus
-            exec(`"${helperPath}" appvolume "${processName}" ${volumeChange}`, { encoding: 'utf8' }, (err, stdout) => {
-                if (err) {
-                    resolve(false);
-                    return;
+    function enqueue(operation, context, action) {
+        const task = tail.then(operation);
+        tail = task.catch(e => fail(context, e, action));
+        return tail;
+    }
+    function paint(context, icon, state = 0, title) {
+        const signature = JSON.stringify([icon, state, title]);
+        if (rendered.get(context) === signature) return;
+        emit('setState', context, {state});
+        emit('setImage', context, {image: image(icon), target: 0});
+        if (title !== undefined) emit('setTitle', context, {title, target: 0});
+        rendered.set(context, signature);
+    }
+    function render(context, record, snapshot) {
+        const s = record.settings, action = record.action.slice(PREFIX.length);
+        if (action === 'toggle') {
+            const active = snapshot[s.deviceType + (s.roles === 'communications' ? 'Comm' : '')];
+            const index = s.devices.findIndex(d => d.id === active?.id), device = s.devices[index];
+            const icon = s.deviceType === 'input' || device?.icon === 'microphone' ? 'mic_device1' : device?.icon === 'headphones' ? 'device2' : 'device1';
+            const title = !s.showDeviceName ? null : active ? `${index < 0 ? '—' : (index + 1) + '/' + s.devices.length}\n${device?.label || device?.name || active.name}` : '—';
+            paint(context, icon, 0, title);
+        } else if (action === 'mute') {
+            const active = snapshot[s.muteType === 'microphone' ? 'input' : 'output'];
+            if (!active) { paint(context, s.muteType === 'microphone' ? 'mic_mute' : 'dev_mute', 0); return; }
+            paint(context, (s.muteType === 'microphone' ? 'mic_' : 'dev_') + (active.muted ? 'mute' : 'unmute'), active.muted ? 1 : 0);
+        } else if (action === 'pushtotalk') {
+            paint(context, held.has(context) && !releases.has(context) ? 'ptt_on' : 'ptt_off', held.has(context) && !releases.has(context) ? 1 : 0);
+        } else if (action === 'setvolume') {
+            const volume = S.number(s.targetVolume, 50, 0, 100);
+            paint(context, 'volume_' + (volume === 0 ? 0 : Math.ceil(volume / 25) * 25));
+        } else if (action === 'playpause') paint(context, 'play'); // A media key is not playback telemetry.
+    }
+    async function refresh() {
+        if (!contexts.size) return;
+        const snapshot = await helper(['snapshot']);
+        for (const [context, record] of contexts) if (record.visible) render(context, record, snapshot);
+    }
+    async function release(context) {
+        const id = held.get(context);
+        if (!id) { releases.delete(context); return; }
+        releases.add(context);
+        // Keep failed releases recorded so the next poll or shutdown can retry.
+        if (![...held].some(([key, otherId]) => key !== context && otherId === id && !releases.has(key))) await helper(['mute', 'input', '1', id]);
+        held.delete(context); releases.delete(context);
+    }
+    async function cleanup() {
+        for (const context of [...held.keys()]) {
+            try { await release(context); } catch (e) { fail(context, e); }
+        }
+    }
+    async function keyDown(context, record) {
+        const s = record.settings, action = record.action.slice(PREFIX.length);
+        switch (action) {
+            case 'toggle': {
+                const available = await helper(['list', s.deviceType]);
+                const target = S.chooseTarget(s, available);
+                await helper(['set', target.id, s.deviceType, s.roles]);
+                break;
+            }
+            case 'mute': await helper(['mute', s.muteType === 'microphone' ? 'input' : 'output', 'toggle']); break;
+            case 'volumeup': case 'volumedown':
+                await helper(['volume', 'output', 'change', String(S.volumeStep(s) * (action === 'volumeup' ? 1 : -1))]); break;
+            case 'setvolume': await helper(['volume', 'output', 'set', String(S.number(s.targetVolume, 50, 0, 100))]); break;
+            case 'appvolumeup': case 'appvolumedown': {
+                const name = S.text(s.processName, 260) || 'focused';
+                const step = S.number(s.appVolumeStep, .1, .01, 1) * (action === 'appvolumeup' ? 1 : -1);
+                await helper(['appvolume', name, String(step)]); break;
+            }
+            case 'pushtotalk': {
+                if (held.has(context)) return;
+                const status = await helper(['status', 'input']);
+                held.set(context, status.id);
+                try { await helper(['mute', 'input', '0', status.id]); }
+                catch (e) { await release(context).catch(cleanupError => fail(context, cleanupError)); throw e; }
+                break;
+            }
+            case 'playpause': {
+                const appPath = S.text(s.appPath, 2048);
+                if (appPath) {
+                    let name = S.text(s.processName, 260);
+                    if (!name && /\.exe$/i.test(appPath)) name = path.win32.basename(appPath);
+                    if (!name) throw new Error('Set the process name when launching a shortcut or application URI.');
+                    if (!(await helper(['running', name])).running) { await helper(['launch', appPath]); await delay(1500); }
                 }
-                try {
-                    const result = JSON.parse(stdout.trim());
-                    if (result.success) {
-                        resolve(true);
-                    } else {
-                        resolve(false);
-                    }
-                } catch (e) {
-                    resolve(false);
-                }
-            });
-        } else {
-            // No helper available - cannot control app volume by process name
-            resolve(false);
-        }
-    });
-}
-
-// Handle set specific volume level
-async function handleSetVolume(context, settings) {
-    // Target volume as percentage (0-100)
-    const targetVolume = settings.targetVolume !== undefined ? settings.targetVolume : 50;
-    // Convert percentage to nircmd value (0-65535)
-    const nircmdVolume = Math.round((targetVolume / 100) * 65535);
-
-    await executeNircmd(`setsysvolume ${nircmdVolume}`);
-}
-
-// Check if process is running by name
-function isProcessRunning(processName) {
-    try {
-        // Remove .exe extension if present, use just the name
-        const name = processName.replace(/\.exe$/i, '');
-        // Use case-insensitive search in tasklist
-        const result = execSync(`tasklist /FI "IMAGENAME eq ${name}.exe" /NH`, { encoding: 'utf8' });
-        // Case-insensitive check for process name
-        const processPattern = new RegExp(name + '\\.exe', 'i');
-        return processPattern.test(result);
-    } catch (e) {
-        return false;
-    }
-}
-
-// Launch application
-function launchApp(appPath) {
-    return new Promise((resolve) => {
-        // Use Windows 'start' command to launch the app
-        // Format: start "" "path\to\app.exe" (empty title "" required)
-        const command = `start "" "${appPath}"`;
-        
-        exec(command, { encoding: 'utf8', timeout: 5000 }, (err) => {
-            if (err) {
-                resolve(false);
-            } else {
-                // Wait a bit for app to start before sending key
-                setTimeout(() => resolve(true), 1000);
+                await helper(['media', 'playpause']); break;
             }
-        });
-    });
-}
-
-// Handle media controls (play/pause, next, previous)
-async function handleMediaControl(context, settings, mediaAction) {
-    // If playpause action and appPath is specified, check if app is running
-    // Only launch if NOT running - if already running, just send media key (don't restore window)
-    if (mediaAction === 'playpause' && settings.appPath) {
-        const appPath = settings.appPath.trim();
-        if (appPath) {
-            // Use processName from settings if specified (for UWP/Store apps)
-            // Otherwise extract from path (e.g., "Spotify.exe" -> "Spotify")
-            let processName = settings.processName ? settings.processName.trim().replace(/\.exe$/i, '') : '';
-            if (!processName) {
-                processName = appPath.split(/[\\\/]/).pop().replace(/\.exe$/i, '');
-            }
-
-            // Check if process is running - if it is, skip launch completely
-            if (!isProcessRunning(processName)) {
-                // App is not running - launch it
-                await launchApp(appPath);
-                // Wait for app to initialize before sending key
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            // If app IS running, don't call launchApp - just send media key directly
+            case 'medianext': await helper(['media', 'next']); break;
+            case 'mediaprev': await helper(['media', 'previous']); break;
+            case 'soundsettings': await helper(['soundsettings']); break;
+            default: return;
         }
+        await refresh();
     }
-    
-    // nircmd uses sendkeypress for media keys
-    // 0x B3 = Play/Pause, 0x B0 = Next, 0x B1 = Previous, 0x B2 = Stop
-    let keyCode;
-    switch (mediaAction) {
-        case 'playpause': keyCode = '0xB3'; break;
-        case 'next': keyCode = '0xB0'; break;
-        case 'previous': keyCode = '0xB1'; break;
-        case 'stop': keyCode = '0xB2'; break;
-        default: return;
-    }
-    await executeNircmd(`sendkeypress ${keyCode}`);
-
-    // Toggle play/pause icon state
-    if (mediaAction === 'playpause') {
-        const currentState = settings.currentState || 0;
-        const newState = currentState === 0 ? 1 : 0;
-        settings.currentState = newState;
-        setSettings(context, settings);
-        updatePlayIcon(context, settings);
-        buttonContexts[context] = settings;
-    }
-}
-
-// Handle Push to Talk (mute on release) - microphone only
-async function handlePushToTalk(context, settings, isKeyDown) {
-    // PTT always uses microphone (default_record)
-    // 0 = mute, 1 = unmute
-    const command = isKeyDown ? `mutesysvolume 1 default_record` : `mutesysvolume 0 default_record`;
-
-    await executeNircmd(command);
-
-    // Update state: 0 = muted (ptt-off), 1 = talking (ptt-on)
-    const newState = isKeyDown ? 1 : 0;
-    settings.currentState = newState;
-    setSettings(context, settings);
-    setState(context, newState);
-    buttonContexts[context] = settings;
-}
-
-// Handle open sound settings
-async function handleSoundSettings(context, settings) {
-    exec('start ms-settings:sound', (err) => {
-        if (err) {
-            // Fallback for older Windows
-            exec('control mmsys.cpl sounds');
-        }
-    });
-}
-
-async function handleKeyDown(context, settings, actionUUID) {
-    // Route to appropriate handler based on action UUID
-    if (actionUUID === 'com.lizard.switchaudio.mute') {
-        await handleMuteToggle(context, settings);
-        return;
-    }
-    
-    if (actionUUID === 'com.lizard.switchaudio.volumeup') {
-        await handleVolumeChange(context, settings, 'up');
-        return;
-    }
-    
-    if (actionUUID === 'com.lizard.switchaudio.volumedown') {
-        await handleVolumeChange(context, settings, 'down');
-        return;
-    }
-    
-    if (actionUUID === 'com.lizard.switchaudio.appvolumeup') {
-        await handleAppVolumeChange(context, settings, 'up');
-        return;
-    }
-    
-    if (actionUUID === 'com.lizard.switchaudio.appvolumedown') {
-        await handleAppVolumeChange(context, settings, 'down');
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.setvolume') {
-        await handleSetVolume(context, settings);
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.playpause') {
-        await handleMediaControl(context, settings, 'playpause');
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.medianext') {
-        await handleMediaControl(context, settings, 'next');
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.mediaprev') {
-        await handleMediaControl(context, settings, 'previous');
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.pushtotalk') {
-        await handlePushToTalk(context, settings, true); // keyDown = unmute
-        return;
-    }
-
-    if (actionUUID === 'com.lizard.switchaudio.soundsettings') {
-        await handleSoundSettings(context, settings);
-        return;
-    }
-
-    // Default: handle device switching (com.lizard.switchaudio.toggle)
-    const mode = settings.mode || 'toggle';
-    const deviceType = settings.deviceType || 'output';
-    
-    if (mode === 'selected') {
-        // Mode: Switch to selected device (always switch to device1 - the selected device)
-        const targetDevice = settings.device1;
-        const targetName = settings.device1Name || 'Selected Device';
-
-        if (!targetDevice) {
+    async function handle(data) {
+        const {event, context, action, device} = data, payload = data.payload || {};
+        if (event === 'deviceDidDisconnect') {
+            for (const [key, record] of contexts) if (record.device === device) {
+                try { await release(key); } finally { contexts.delete(key); rendered.delete(key); }
+            }
             return;
         }
-
-        const success = await switchDevice(targetDevice, targetName, deviceType);
-        if (success) {
-            setState(context, 0); // Always state 0 in selected mode
-        }
-    } else {
-        // Mode: Toggle between two devices
-        const device1 = settings.device1;
-        const device2 = settings.device2;
-        const device1Name = settings.device1Name || 'Device 1';
-        const device2Name = settings.device2Name || 'Device 2';
-
-        if (!device1 || !device2) {
+        if (event === 'sendToPlugin' && payload.requestDevices) {
+            const deviceType = payload.deviceType === 'input' ? 'input' : 'output';
+            try {
+                const devices = await helper(['list', deviceType]);
+                emit('sendToPropertyInspector', context, {devices, deviceType, requestId: payload.requestId}, action);
+            } catch (e) { emit('sendToPropertyInspector', context, {error: e.message, deviceType, requestId: payload.requestId}, action); }
             return;
         }
-
-        // Current state (0 = device1, 1 = device2)
-        let currentState = settings.currentState || 0;
-        let newState = currentState === 0 ? 1 : 0;
-        let targetDevice = newState === 0 ? device1 : device2;
-        let targetName = newState === 0 ? device1Name : device2Name;
-
-        const success = await switchDevice(targetDevice, targetName, deviceType);
-        if (success) {
-            settings.currentState = newState;
-            setSettings(context, settings);
-            setState(context, newState);
-            // Update icon based on deviceType (input/output)
-            updateDeviceIcon(context, settings);
-            buttonContexts[context] = settings;
+        if (event === 'willDisappear') {
+            try { await release(context); } finally { contexts.delete(context); rendered.delete(context); } return;
         }
+        if (!context || !(action || contexts.get(context)?.action || '').startsWith(PREFIX)) return;
+        if (event === 'willAppear' || event === 'didReceiveSettings' || !contexts.has(context)) {
+            const previous = contexts.get(context);
+            const settings = S.normalize(payload.settings || previous?.settings || {});
+            contexts.set(context, {action: action || previous.action, settings, device: device || previous?.device,
+                visible: event === 'willAppear' || previous?.visible === true});
+            rendered.delete(context);
+        }
+        const record = contexts.get(context);
+        if (event === 'keyDown') await keyDown(context, record);
+        else if (event === 'keyUp' && record.action === PREFIX + 'pushtotalk') { await release(context); await refresh(); }
+        else if (event === 'willAppear' || event === 'didReceiveSettings') await refresh();
     }
+    return {
+        dispatch(data) { if (stopped) return Promise.resolve(); return enqueue(() => handle(data), data.context, data.action); },
+        poll() {
+            if (stopped || pollPending || (!releases.size && ![...contexts.values()].some(r => r.visible))) return Promise.resolve();
+            pollPending = true;
+            return enqueue(async () => {
+                for (const key of [...held.keys()]) if (releases.has(key) || !contexts.get(key)?.visible) await release(key);
+                await refresh();
+            }).finally(() => { pollPending = false; });
+        },
+        disconnect() { return enqueue(async () => { await cleanup(); contexts.clear(); rendered.clear(); }); },
+        shutdown() { stopped = true; return enqueue(cleanup); },
+        idle() { return tail; }
+    };
 }
 
-async function handleMessage(msg) {
-    const data = JSON.parse(msg);
-    // IMPORTANT: action UUID is in data.action, NOT in payload!
-    const { event, context, payload, action } = data;
-
-    switch(event) {
-        case 'keyDown':
-            // Merge saved settings with current payload settings
-            const savedSettings = buttonContexts[context] || {};
-            const currentSettings = { ...savedSettings, ...payload.settings };
-            // Get action UUID from data.action (StreamDock API) or stored value
-            const actionUUID = action || actionUUIDs[context] || 'com.lizard.switchaudio.toggle';
-            await handleKeyDown(context, currentSettings, actionUUID);
-            break;
-
-        case 'keyUp':
-            // Handle keyUp for Push to Talk
-            const keyUpAction = action || actionUUIDs[context];
-            if (keyUpAction === 'com.lizard.switchaudio.pushtotalk') {
-                const pttSettings = { ...buttonContexts[context], ...payload.settings };
-                await handlePushToTalk(context, pttSettings, false); // keyUp = mute
-            }
-            break;
-
-        case 'willAppear':
-            buttonContexts[context] = payload.settings;
-            // Store action UUID for this context (from data.action)
-            if (action) {
-                actionUUIDs[context] = action;
-            }
-            // Update icon and state based on action type
-            if (action === 'com.lizard.switchaudio.mute') {
-                setState(context, payload.settings.currentState || 0);
-                updateMuteIcon(context, payload.settings);
-            } else if (action === 'com.lizard.switchaudio.toggle') {
-                setState(context, payload.settings.currentState || 0);
-                updateDeviceIcon(context, payload.settings);
-            } else if (action === 'com.lizard.switchaudio.playpause') {
-                setState(context, payload.settings.currentState || 0);
-                updatePlayIcon(context, payload.settings);
-            } else if (action === 'com.lizard.switchaudio.setvolume') {
-                updateVolumeIcon(context, payload.settings);
-            } else {
-                setState(context, payload.settings.currentState || 0);
-            }
-            break;
-
-        case 'willDisappear':
-            delete buttonContexts[context];
-            delete actionUUIDs[context];
-            break;
-
-        case 'didReceiveSettings':
-            buttonContexts[context] = payload.settings;
-            // Update icon based on action type
-            if (actionUUIDs[context] === 'com.lizard.switchaudio.mute') {
-                setState(context, payload.settings.currentState || 0);
-                // Update icon AFTER setState to override manifest icons
-                updateMuteIcon(context, payload.settings);
-            } else if (actionUUIDs[context] === 'com.lizard.switchaudio.toggle') {
-                setState(context, payload.settings.currentState || 0);
-                // Update icon based on deviceType (input/output)
-                updateDeviceIcon(context, payload.settings);
-            } else if (actionUUIDs[context] === 'com.lizard.switchaudio.setvolume') {
-                updateVolumeIcon(context, payload.settings);
-            }
-            break;
-
-        case 'sendToPlugin':
-            if (payload.requestDevices) {
-                const deviceType = payload.deviceType || 'output';
-                const devices = await getAudioDevices(deviceType);
-                send({
-                    event: 'sendToPropertyInspector',
-                    context: context,
-                    payload: { devices: devices }
-                });
-            }
-            break;
-    }
-}
-
-function connect() {
-    const args = process.argv;
-    let port, pluginUUID, registerEvent;
-
-    for (let i = 0; i < args.length; i++) {
-        if (args[i] === '-port') port = args[i + 1];
-        if (args[i] === '-pluginUUID') pluginUUID = args[i + 1];
-        if (args[i] === '-registerEvent') registerEvent = args[i + 1];
-    }
-
-    if (!port) {
-        return;
-    }
-
-    ws = new WebSocket(`ws://127.0.0.1:${port}`);
-
-    ws.on('open', () => {
-        send({
-            event: registerEvent,
-            uuid: pluginUUID
+function run() {
+    const WebSocket = require('ws');
+    const args = process.argv.slice(2), arg = name => args[args.indexOf(name) + 1];
+    const port = Number(arg('-port')), uuid = arg('-pluginUUID'), register = arg('-registerEvent');
+    if (!args.includes('-port') || !Number.isInteger(port) || port < 1 || port > 65535 || !uuid || !register) return;
+    let socket, retry, quitting = false;
+    const images = new Map();
+    const send = data => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); };
+    const controller = createController({send, image(name) {
+        if (!images.has(name)) images.set(name, 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(__dirname, '..', 'images', name + '.svg')).toString('base64'));
+        return images.get(name);
+    }, log(message) { console.error('[Audio Switch]', message); send({event: 'logMessage', payload: {message: '[Audio Switch] ' + message}}); }});
+    function connect() {
+        if (quitting) return;
+        socket = new WebSocket(`ws://127.0.0.1:${port}`, {maxPayload: 1024 * 1024});
+        socket.on('open', () => send({event: register, uuid}));
+        socket.on('message', message => {
+            try { controller.dispatch(JSON.parse(message.toString())); }
+            catch (e) { console.error('Malformed host message:', e.message); }
         });
-    });
-
-    ws.on('message', (msg) => {
-        handleMessage(msg.toString()).catch(() => {});
-    });
-
-    ws.on('close', () => {
-        setTimeout(connect, 3000);
-    });
-
-    ws.on('error', () => {});
+        socket.on('error', e => console.error('Host connection:', e.message));
+        socket.on('close', () => { controller.disconnect().finally(() => { if (!quitting) retry = setTimeout(connect, 3000); }); });
+    }
+    const timer = setInterval(() => { controller.poll(); }, 2000);
+    async function shutdown() {
+        if (quitting) return; quitting = true; clearInterval(timer); clearTimeout(retry);
+        await controller.shutdown(); socket?.close(); process.exit(0);
+    }
+    process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
+    connect();
 }
-
-connect();
+if (require.main === module) run();
+module.exports = {createController, nativeHelper};

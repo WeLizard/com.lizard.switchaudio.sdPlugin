@@ -1,9 +1,9 @@
 {
   "name": "audio-switch-pro-plugin",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "private": true,
   "main": "main.js",
   "dependencies": {
-    "ws": "^8.19.0"
+    "ws": "8.22.0"
   }
 }
