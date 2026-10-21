@@ -1,0 +1,11 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {nativeHelper}=require('../plugin/main');
+const onlyWindows={skip:process.platform!=='win32'};
+test('native: compiled helper matches package version',onlyWindows,async()=>assert.equal((await nativeHelper(['version'])).version,require('../plugin/package.json').version));
+test('native: six ABI/JSON/argument self-tests pass',onlyWindows,async()=>{const r=await nativeHelper(['selftest']);assert.equal(r.success,true);assert.equal(r.tests,6);});
+test('native: headless snapshot is structured even without endpoints',onlyWindows,async()=>{const r=await nativeHelper(['snapshot']);for(const k of ['output','input','outputComm','inputComm'])assert(k in r);});
+test('native: invalid command exits as a structured error',onlyWindows,async()=>assert.rejects(nativeHelper(['no-such-command']),/Unknown command/));
+test('native: invalid flow rejected before touching audio',onlyWindows,async()=>assert.rejects(nativeHelper(['list','wrong']),/input or output/));
+test('native: NaN application-volume argument rejected',onlyWindows,async()=>assert.rejects(nativeHelper(['appvolume','none','NaN']),/Numeric argument/));

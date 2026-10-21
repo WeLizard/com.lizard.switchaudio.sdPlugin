@@ -22,11 +22,14 @@ jobs:
         with:
           node-version: '20'
       - name: Refresh exact ws pin for reviewed dependency update
-        run: npm install --prefix plugin --package-lock-only --ignore-scripts
+        working-directory: plugin
+        run: npm install --package-lock-only --ignore-scripts
       - name: Install locked runtime dependencies
-        run: npm ci --prefix plugin --omit=dev --ignore-scripts
+        working-directory: plugin
+        run: npm ci --omit=dev --ignore-scripts
       - name: Audit runtime dependencies
-        run: npm audit --prefix plugin --omit=dev --audit-level=high
+        working-directory: plugin
+        run: npm audit --omit=dev --audit-level=high
       - name: Compile native Windows audio helper
         shell: pwsh
         run: |
@@ -54,6 +57,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Packaging validation failed' }
           & powershell.exe -NoProfile -File dist\AudioSwitch-1.4.0-StreamDock\Install-StreamDock.ps1 -ValidateOnly
           if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell package validation failed' }
+          & powershell.exe -NoProfile -File tools\install-smoke.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Installer smoke test failed' }
       - name: Upload build and complete sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
