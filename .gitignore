@@ -2,11 +2,13 @@
 plugin/node_modules/
 node_modules/
 
-# Build artifacts and executables (use GitHub Releases for distributable builds)
+# Build artifacts and executables (use releases for distributable builds)
 plugin/*.exe
 plugin/*.dll
 plugin/*.pdb
 plugin/*.cache
+dist/
+release_temp/
 
 # Downloaded files
 plugin/nircmd.zip
@@ -36,10 +38,10 @@ desktop.ini
 # Stream Deck specific
 *.sdPlugin.bak
 
-# Package files (but allow release archives in root if needed)
-# *.zip
+# Package files
 *.7z
 com.lizard.switchaudio.sdPlugin.zip
+AudioSwitch-*.zip
 
 # Temporary files
 *.tmp

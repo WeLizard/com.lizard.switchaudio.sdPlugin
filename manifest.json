@@ -1,203 +1,23 @@
 {
   "Actions": [
-    {
-      "Icon": "images/icon",
-      "Name": "Audio Switch",
-      "States": [
-        {
-          "Image": "images/device1",
-          "Name": "Primary"
-        },
-        {
-          "Image": "images/device2",
-          "Name": "Secondary"
-        }
-      ],
-      "SupportedInMultiActions": false,
-      "Tooltip": "Toggle between two audio devices (Default + Communication)",
-      "UUID": "com.lizard.switchaudio.toggle",
-      "PropertyInspectorPath": "property.html"
-    },
-    {
-      "Icon": "images/dev_unmute",
-      "Name": "Mute Toggle",
-      "States": [
-        {
-          "Image": "images/dev_unmute",
-          "Name": "Unmuted"
-        },
-        {
-          "Image": "images/dev_mute",
-          "Name": "Muted"
-        }
-      ],
-      "SupportedInMultiActions": false,
-      "Tooltip": "Toggle mute/unmute (System/Microphone)",
-      "UUID": "com.lizard.switchaudio.mute",
-      "PropertyInspectorPath": "property-mute.html"
-    },
-    {
-      "Icon": "images/volume_up",
-      "Name": "Volume Up",
-      "States": [
-        {
-          "Image": "images/volume_up",
-          "Name": "Volume Up"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Increase system volume",
-      "UUID": "com.lizard.switchaudio.volumeup"
-    },
-    {
-      "Icon": "images/volume_down",
-      "Name": "Volume Down",
-      "States": [
-        {
-          "Image": "images/volume_down",
-          "Name": "Volume Down"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Decrease system volume",
-      "UUID": "com.lizard.switchaudio.volumedown"
-    },
-    {
-      "Icon": "images/app_volume_up",
-      "Name": "App Volume Up",
-      "PropertyInspectorPath": "property-appvolume.html",
-      "States": [
-        {
-          "Image": "images/app_volume_up",
-          "Name": "App Volume Up"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Increase focused application volume",
-      "UUID": "com.lizard.switchaudio.appvolumeup"
-    },
-    {
-      "Icon": "images/app_volume_down",
-      "Name": "App Volume Down",
-      "PropertyInspectorPath": "property-appvolume.html",
-      "States": [
-        {
-          "Image": "images/app_volume_down",
-          "Name": "App Volume Down"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Decrease focused application volume",
-      "UUID": "com.lizard.switchaudio.appvolumedown"
-    },
-    {
-      "Icon": "images/volume",
-      "Name": "Set Volume",
-      "States": [
-        {
-          "Image": "images/volume",
-          "Name": "Set Volume"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Set system volume to specific level",
-      "UUID": "com.lizard.switchaudio.setvolume",
-      "PropertyInspectorPath": "property-volume.html"
-    },
-    {
-      "Icon": "images/play",
-      "Name": "Play / Pause",
-      "States": [
-        {
-          "Image": "images/play",
-          "Name": "Play / Pause"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Toggle media play/pause",
-      "UUID": "com.lizard.switchaudio.playpause",
-      "PropertyInspectorPath": "property-play.html"
-    },
-    {
-      "Icon": "images/next",
-      "Name": "Next Track",
-      "States": [
-        {
-          "Image": "images/next",
-          "Name": "Next Track"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Skip to next track",
-      "UUID": "com.lizard.switchaudio.medianext"
-    },
-    {
-      "Icon": "images/prev",
-      "Name": "Previous Track",
-      "States": [
-        {
-          "Image": "images/prev",
-          "Name": "Previous Track"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Go to previous track",
-      "UUID": "com.lizard.switchaudio.mediaprev"
-    },
-    {
-      "Icon": "images/ptt",
-      "Name": "Push to Talk",
-      "States": [
-        {
-          "Image": "images/ptt_off",
-          "Name": "Muted"
-        },
-        {
-          "Image": "images/ptt_on",
-          "Name": "Talking"
-        }
-      ],
-      "SupportedInMultiActions": false,
-      "Tooltip": "Hold to unmute, release to mute (not supported on all devices)",
-      "UUID": "com.lizard.switchaudio.pushtotalk",
-      "PropertyInspectorPath": "property-ptt.html"
-    },
-    {
-      "Icon": "images/settings",
-      "Name": "Sound Settings",
-      "States": [
-        {
-          "Image": "images/settings",
-          "Name": "Sound Settings"
-        }
-      ],
-      "SupportedInMultiActions": true,
-      "Tooltip": "Open Windows sound settings",
-      "UUID": "com.lizard.switchaudio.soundsettings"
-    }
+    {"Icon":"images/icon","Name":"Audio Switch","States":[{"Image":"images/device1","Name":"Current audio device","FontSize":"11","TitleAlignment":"bottom"}],"SupportedInMultiActions":false,"Tooltip":"Cycle through 1–32 configured devices using the actual Windows default","UUID":"com.lizard.switchaudio.toggle","PropertyInspectorPath":"property.html"},
+    {"Icon":"images/dev_unmute","Name":"Mute Toggle","States":[{"Image":"images/dev_unmute","Name":"Unmuted"},{"Image":"images/dev_mute","Name":"Muted"}],"DisableAutomaticStates":true,"SupportedInMultiActions":false,"Tooltip":"Toggle mute/unmute (System/Microphone)","UUID":"com.lizard.switchaudio.mute","PropertyInspectorPath":"property-mute.html"},
+    {"Icon":"images/volume_up","Name":"Volume Up","States":[{"Image":"images/volume_up","Name":"Volume Up"}],"SupportedInMultiActions":true,"Tooltip":"Increase system volume","UUID":"com.lizard.switchaudio.volumeup","PropertyInspectorPath":"property-step.html"},
+    {"Icon":"images/volume_down","Name":"Volume Down","States":[{"Image":"images/volume_down","Name":"Volume Down"}],"SupportedInMultiActions":true,"Tooltip":"Decrease system volume","UUID":"com.lizard.switchaudio.volumedown","PropertyInspectorPath":"property-step.html"},
+    {"Icon":"images/app_volume_up","Name":"App Volume Up","PropertyInspectorPath":"property-appvolume.html","States":[{"Image":"images/app_volume_up","Name":"App Volume Up"}],"SupportedInMultiActions":true,"Tooltip":"Increase configured or focused application volume","UUID":"com.lizard.switchaudio.appvolumeup"},
+    {"Icon":"images/app_volume_down","Name":"App Volume Down","PropertyInspectorPath":"property-appvolume.html","States":[{"Image":"images/app_volume_down","Name":"App Volume Down"}],"SupportedInMultiActions":true,"Tooltip":"Decrease configured or focused application volume","UUID":"com.lizard.switchaudio.appvolumedown"},
+    {"Icon":"images/volume","Name":"Set Volume","States":[{"Image":"images/volume","Name":"Set Volume"}],"SupportedInMultiActions":true,"Tooltip":"Set system volume to specific level","UUID":"com.lizard.switchaudio.setvolume","PropertyInspectorPath":"property-volume.html"},
+    {"Icon":"images/play","Name":"Play / Pause","States":[{"Image":"images/play","Name":"Play / Pause"}],"SupportedInMultiActions":true,"Tooltip":"Toggle media play/pause","UUID":"com.lizard.switchaudio.playpause","PropertyInspectorPath":"property-play.html"},
+    {"Icon":"images/next","Name":"Next Track","States":[{"Image":"images/next","Name":"Next Track"}],"SupportedInMultiActions":true,"Tooltip":"Skip to next track","UUID":"com.lizard.switchaudio.medianext"},
+    {"Icon":"images/prev","Name":"Previous Track","States":[{"Image":"images/prev","Name":"Previous Track"}],"SupportedInMultiActions":true,"Tooltip":"Go to previous track","UUID":"com.lizard.switchaudio.mediaprev"},
+    {"Icon":"images/ptt","Name":"Push to Talk","States":[{"Image":"images/ptt_off","Name":"Muted"},{"Image":"images/ptt_on","Name":"Talking"}],"DisableAutomaticStates":true,"SupportedInMultiActions":false,"Tooltip":"Hold to unmute, release to mute; requires keyDown and keyUp support","UUID":"com.lizard.switchaudio.pushtotalk","PropertyInspectorPath":"property-ptt.html"},
+    {"Icon":"images/settings","Name":"Sound Settings","States":[{"Image":"images/settings","Name":"Sound Settings"}],"SupportedInMultiActions":true,"Tooltip":"Open Windows sound settings","UUID":"com.lizard.switchaudio.soundsettings"}
   ],
-  "SDKVersion": 1,
-  "Author": "Lizard",
-  "Category": "Audio",
-  "CategoryIcon": "images/icon",
-  "CodePathWin": "plugin/main.js",
-  "CodePathMac": "plugin/main.js",
-  "Description": "Switch both Default and Communication audio devices with one click (sets device for calls, Discord, Teams, etc.)",
-  "Name": "Audio Switch Pro",
-  "Icon": "images/icon",
-  "Version": "1.2.1",
-  "URL": "https://github.com/Lizardjazz1/com.lizard.switchaudio.sdPlugin",
-  "DefaultLocale": "en",
-  "OS": [
-    {
-      "Platform": "windows",
-      "MinimumVersion": "10"
-    }
-  ],
-  "Software": {
-    "MinimumVersion": "3.10.188.226"
-  },
-  "Nodejs": {
-    "Version": "20"
-  }
+  "SDKVersion":1,"Author":"Lizard","Category":"Audio","CategoryIcon":"images/icon",
+  "CodePath":"plugin/main.js","CodePathWin":"plugin/main.js",
+  "Description":"Cycle through configured Windows audio devices; native mute, volume and media controls.",
+  "Name":"Audio Switch Pro","Icon":"images/icon","Version":"1.4.0",
+  "URL":"https://github.com/WeLizard/com.lizard.switchaudio.sdPlugin","DefaultLocale":"en",
+  "OS":[{"Platform":"windows","MinimumVersion":"10"}],
+  "Software":{"MinimumVersion":"3.10.188.226"},"Nodejs":{"Version":"20"}
 }

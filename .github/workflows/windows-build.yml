@@ -1,0 +1,79 @@
+name: Windows build and package
+on:
+  push:
+    branches: [main, 'astra/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: audio-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+      - name: Install locked runtime dependencies
+        working-directory: plugin
+        run: npm ci --omit=dev --ignore-scripts
+      - name: Audit runtime dependencies
+        working-directory: plugin
+        run: npm audit --omit=dev --audit-level=high
+      - name: Compile native Windows audio helper
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          Push-Location plugin
+          try {
+            & $compiler /nologo /optimize+ /platform:anycpu /target:exe /out:AudioSwitch.exe AudioSwitch.cs
+            if ($LASTEXITCODE -ne 0) { throw 'AudioSwitch compilation failed' }
+            & .\AudioSwitch.exe selftest
+            if ($LASTEXITCODE -ne 0) { throw 'Native self-tests failed' }
+            & .\AudioSwitch.exe snapshot
+            if ($LASTEXITCODE -ne 0) { throw 'Headless snapshot failed' }
+          } finally { Pop-Location }
+      - name: Validate JavaScript, run regression tests and build ZIP
+        shell: pwsh
+        run: |
+          node --check plugin/main.js
+          if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax failed' }
+          node --check property.js
+          if ($LASTEXITCODE -ne 0) { throw 'Inspector syntax failed' }
+          node --test
+          if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
+          node tools/package.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging validation failed' }
+          & powershell.exe -NoProfile -File dist\AudioSwitch-1.4.0-StreamDock\Install-StreamDock.ps1 -ValidateOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell package validation failed' }
+          & powershell.exe -NoProfile -File tools\install-smoke.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Installer smoke test failed' }
+      - name: Upload build and complete sources
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: AudioSwitch-Windows-build
+          path: |
+            *.json
+            *.html
+            *.js
+            *.css
+            *.md
+            *.bat
+            *.ps1
+            LICENSE*
+            images/
+            plugin/
+            tests/
+            tools/
+            dist/
+          if-no-files-found: error
+          retention-days: 14
