@@ -1,0 +1,28 @@
+name: Native audio observer 1.5
+on:
+  push:
+    branches: [astra/active-device-audio-20261022]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-audio-150-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile exact native sources and run read-only Windows tests
+        run: python native-150/build-and-test.py
+      - name: Upload native binary, exact sources and test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: AudioSwitch-1.5.0-native
+          path: native-150-output/
+          if-no-files-found: error
+          retention-days: 14
