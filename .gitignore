@@ -46,3 +46,7 @@ AudioSwitch-*.zip
 # Temporary files
 *.tmp
 *.temp
+
+# Native build output
+build/
+native-150-output/

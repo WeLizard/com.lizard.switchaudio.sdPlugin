@@ -27,20 +27,13 @@ jobs:
       - name: Audit runtime dependencies
         working-directory: plugin
         run: npm audit --omit=dev --audit-level=high
-      - name: Compile native Windows audio helper
+      - name: Compile native Windows audio helper and run validation suite
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          Push-Location plugin
-          try {
-            & $compiler /nologo /optimize+ /platform:anycpu /target:exe /out:AudioSwitch.exe AudioSwitch.cs
-            if ($LASTEXITCODE -ne 0) { throw 'AudioSwitch compilation failed' }
-            & .\AudioSwitch.exe selftest
-            if ($LASTEXITCODE -ne 0) { throw 'Native self-tests failed' }
-            & .\AudioSwitch.exe snapshot
-            if ($LASTEXITCODE -ne 0) { throw 'Headless snapshot failed' }
-          } finally { Pop-Location }
+          python tools/build-native.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native build or validation failed' }
+          Copy-Item build/AudioSwitch.exe plugin/AudioSwitch.exe -Force
       - name: Validate JavaScript, run regression tests and build ZIP
         shell: pwsh
         run: |

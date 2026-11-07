@@ -1,7 +1,7 @@
 name: Native audio observer 1.5
 on:
   push:
-    branches: [astra/active-device-audio-20261022]
+    branches: [main, 'astra/**', 'feature/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,13 +16,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Compile exact native sources and run read-only Windows tests
-        run: python native-150/build-and-test.py
-      - name: Upload native binary, exact sources and test evidence
+      - name: Compile native sources and run read-only Windows tests
+        run: python tools/build-native.py
+      - name: Upload native binary, sources and test evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: AudioSwitch-1.5.0-native
-          path: native-150-output/
+          name: AudioSwitch-native
+          path: build/
           if-no-files-found: error
           retention-days: 14

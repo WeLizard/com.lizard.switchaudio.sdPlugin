@@ -25,8 +25,8 @@ namespace AudioSwitch
         [PreserveSig] int EnumAudioEndpoints(int flow, int mask, out IMMDeviceCollection devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
         [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
-        [PreserveSig] int RegisterEndpointNotificationCallback(IntPtr client);
-        [PreserveSig] int UnregisterEndpointNotificationCallback(IntPtr client);
+        [PreserveSig] int RegisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
+        [PreserveSig] int UnregisterEndpointNotificationCallback([MarshalAs(UnmanagedType.Interface)] IMMNotificationClient client);
     }
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
     class MMDeviceEnumerator { }
@@ -39,7 +39,7 @@ namespace AudioSwitch
         [PreserveSig] int Commit();
     }
     [StructLayout(LayoutKind.Sequential)]
-    struct PropertyKey {
+    public struct PropertyKey {
         public Guid fmtid; public int pid;
         public PropertyKey(Guid fmtid, int pid) { this.fmtid = fmtid; this.pid = pid; }
     }
@@ -141,8 +141,8 @@ namespace AudioSwitch
         [PreserveSig] int QueryHardwareSupport(out uint mask);
         [PreserveSig] int GetVolumeRange(out float min, out float max, out float increment);
     }
-    class Program {
-        const string Version = "1.4.0";
+    partial class Program {
+        const string Version = "1.5.0";
         static PropertyKey FriendlyName = new PropertyKey(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
         static readonly Guid VolumeGuid = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
         static readonly Guid SessionGuid = new Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
@@ -177,7 +177,7 @@ namespace AudioSwitch
         static string Id(IMMDevice device) { string id; Hr(device.GetId(out id)); return id; }
         static string DefaultId(IMMDeviceEnumerator e, int flow, int role) {
             IMMDevice d = null;
-            try { int hr = e.GetDefaultAudioEndpoint(flow, role, out d); return hr < 0 || d == null ? "" : Id(d); }
+            try { int hr = e.GetDefaultAudioEndpoint(flow, role, out d); if (hr == NotFound) return ""; Hr(hr); return Id(d); }
             finally { Release(d); }
         }
         static string Name(IMMDevice device) {
@@ -341,12 +341,15 @@ namespace AudioSwitch
             if (!rejected) throw new Exception("NaN validation failed");
             return "{\"success\":true,\"version\":" + Q(Version) + ",\"tests\":6}";
         }
-        [STAThread]
+        [MTAThread]
         static int Main(string[] args) {
             Console.OutputEncoding = new UTF8Encoding(false);
             try {
                 string result;
-                if (args.Length == 1 && args[0] == "selftest") result = SelfTest();
+                if (args.Length == 1 && args[0] == "watch") return Watch();
+                if (args.Length == 1 && args[0] == "snapshot-v2") result = SnapshotV2();
+                else if (args.Length == 1 && args[0] == "telemetry-selftest") result = TelemetrySelfTest();
+                else if (args.Length == 1 && args[0] == "selftest") result = SelfTest();
                 else if (args.Length == 1 && args[0] == "version") result = "{\"success\":true,\"version\":" + Q(Version) + "}";
                 else if (args.Length == 1 && args[0] == "snapshot") result = "{\"success\":true,\"output\":" + MaybeStatus(0, 0) + ",\"input\":" + MaybeStatus(1, 0) + ",\"outputComm\":" + MaybeStatus(0, 2) + ",\"inputComm\":" + MaybeStatus(1, 2) + "}";
                 else if (args.Length == 2 && args[0] == "list") result = ListDevices(Flow(args[1]));
