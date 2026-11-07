@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144" data-device-kind="line_in" data-badge-color="#83be9c" data-badge-ink="#18282e" role="img">
+<title>Line input / AUX</title>
+<defs><linearGradient id="background" x1="6" y1="6" x2="138" y2="138" gradientUnits="userSpaceOnUse"><stop stop-color="#2c4042"/><stop offset="1" stop-color="#18282e"/></linearGradient><linearGradient id="symbol" x1="28" y1="24" x2="116" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#94c7aa"/><stop offset="1" stop-color="#83be9c"/></linearGradient></defs>
+<rect width="144" height="144" rx="35" fill="url(#background)"/>
+<g id="device-symbol" fill="url(#symbol)"><path d="M32 31V45M32 45H52M42 45V58" fill="none" stroke="url(#symbol)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="29" y="56" width="26" height="30" rx="5"/><path d="M42 86V90Q42 101 55 101H83Q95 101 95 90V83" fill="none" stroke="url(#symbol)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="83" y="52" width="24" height="32" rx="5"/><path d="M95 29V52" fill="none" stroke="url(#symbol)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M89 35H101M89 45H101" fill="none" stroke="url(#symbol)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+<!-- POSITION_BADGE_START --><!-- POSITION_BADGE_END -->
+</svg>

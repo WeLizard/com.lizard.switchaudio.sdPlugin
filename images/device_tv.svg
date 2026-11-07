@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144" data-device-kind="television" data-badge-color="#b9d765" data-badge-ink="#202c26" role="img">
+<title>TV / HDMI audio</title>
+<defs><linearGradient id="background" x1="6" y1="6" x2="138" y2="138" gradientUnits="userSpaceOnUse"><stop stop-color="#3a4734"/><stop offset="1" stop-color="#202c26"/></linearGradient><linearGradient id="symbol" x1="28" y1="24" x2="116" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#c3dd7b"/><stop offset="1" stop-color="#b9d765"/></linearGradient></defs>
+<rect width="144" height="144" rx="35" fill="url(#background)"/>
+<g id="device-symbol" fill="url(#symbol)"><rect x="18" y="28" width="108" height="66" rx="8"/><rect x="24" y="34" width="96" height="52" rx="4" fill="#202c26"/><path d="M42 94L36 103M102 94L108 103" fill="none" stroke="url(#symbol)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M66 48V71M66 48L82 44V67" fill="none" stroke="url(#symbol)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="61" cy="72" r="6"/><circle cx="77" cy="68" r="6"/></g>
+<!-- POSITION_BADGE_START --><!-- POSITION_BADGE_END -->
+</svg>

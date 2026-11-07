@@ -4,7 +4,7 @@
   "Category": "Аудио",
   "com.lizard.switchaudio.toggle": {
     "Name": "Переключить аудио",
-    "Tooltip": "Переключение между двумя аудиоустройствами (Default + Communication)"
+    "Tooltip": "Выбор аудиоустройства или переключение по списку; подсветка реального назначения Windows"
   },
   "com.lizard.switchaudio.mute": {
     "Name": "Mute/Unmute",

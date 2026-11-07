@@ -4,7 +4,7 @@
   "Category": "Audio",
   "com.lizard.switchaudio.toggle": {
     "Name": "Audio Switch",
-    "Tooltip": "Toggle between two audio devices (Default + Communication)"
+    "Tooltip": "Select a Windows audio device or cycle through your list; highlight actual default assignment"
   },
   "com.lizard.switchaudio.mute": {
     "Name": "Mute Toggle",

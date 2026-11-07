@@ -1,8 +1,8 @@
 /* Shared by Node and the Property Inspector. No host or Windows dependencies. */
 (function (root, factory) {
-    if (typeof module === 'object' && module.exports) module.exports = factory();
-    else root.AudioSettings = factory();
-}(typeof globalThis === 'object' ? globalThis : this, function () {
+    if (typeof module === 'object' && module.exports) module.exports = factory(require('./device-catalog')); 
+    else root.AudioSettings = factory(root.AudioDeviceCatalog);
+}(typeof globalThis === 'object' ? globalThis : this, function (Catalog) {
     'use strict';
     const MAX_DEVICES = 32;
     function text(value, max = 512) { return typeof value === 'string' ? value.slice(0, max).trim() : ''; }
@@ -16,21 +16,25 @@
         // An explicitly empty v2 list must not resurrect a deleted legacy pair.
         const old = [1, 2].filter(i => s['device' + i]).map(i => ({
             id: s['device' + i], name: s['device' + i + 'Name'],
-            icon: i === 2 ? 'headphones' : 'speakers'
+            icon: s.deviceType === 'input' ? 'microphone' : i === 1 ? 'headphones' : 'speakers_large'
         }));
         const source = Array.isArray(s.devices) ? s.devices : old;
+        const badgeMode = ['auto', 'custom', 'off'].includes(s.badgeMode) ? s.badgeMode : s.showDeviceNumber === false ? 'off' : 'auto';
         const seen = new Set();
         const devices = source.slice(0, MAX_DEVICES).map(d => {
             d = d && typeof d === 'object' ? d : {};
             return {id: text(d.id), name: text(d.name), label: text(d.label, 40),
-                icon: ['speakers', 'headphones', 'microphone'].includes(d.icon) ? d.icon : 'speakers'};
+                icon: Catalog.normalizeKind(d.icon, s.deviceType === 'input' ? 'input' : 'output')};
         }).filter(d => { if (!d.id || seen.has(d.id)) return false; seen.add(d.id); return true; });
-        return {...s, schemaVersion: 2, devices,
+        return {...s, schemaVersion: 3, devices,
             deviceType: s.deviceType === 'input' ? 'input' : 'output',
             mode: s.mode === 'selected' ? 'selected' : 'cycle',
             roles: ['all', 'media', 'communications'].includes(s.roles) ? s.roles : 'all',
             skipUnavailable: s.skipUnavailable !== false,
-            showDeviceName: s.showDeviceName !== false,
+            showDeviceName: false, // Old captions are intentionally not restored.
+            showDeviceNumber: badgeMode !== 'off',
+            badgeMode, customNumber: Math.round(number(s.customNumber, 1, 1, 32)),
+            highlightActive: s.highlightActive !== false,
             direction: s.direction === 'previous' ? 'previous' : 'next'};
     }
     function currentDevice(devices, roles) {
@@ -63,5 +67,10 @@
         if (s.volumeStepPercent !== undefined) return number(s.volumeStepPercent, 5, 1, 100);
         return s.volumeStep !== undefined ? number(Number(s.volumeStep) / 655.35, 5, 1, 100) : 5;
     }
-    return {MAX_DEVICES, text, number, normalize, currentDevice, chooseTarget, volumeStep};
+    function badgeFor(settings, index) {
+        const s = normalize(settings);
+        if (index < 0 || s.badgeMode === 'off') return 0;
+        return s.badgeMode === 'custom' ? s.customNumber : index + 1;
+    }
+    return {badgeFor, MAX_DEVICES, text, number, normalize, currentDevice, chooseTarget, volumeStep};
 }));

@@ -3,8 +3,8 @@
   "Description": "一键切换默认和通讯音频设备（设置通话、Discord、Teams等的设备）",
   "Category": "音频",
   "com.lizard.switchaudio.toggle": {
-    "Name": "音频切换",
-    "Tooltip": "在两个音频设备之间切换（默认 + 通讯）"
+    "Name": "切换音频",
+    "Tooltip": "选择音频设备或循环切换列表；高亮 Windows 的实际默认设备"
   },
   "com.lizard.switchaudio.mute": {
     "Name": "静音切换",

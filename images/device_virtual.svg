@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144" data-device-kind="virtual_audio" data-badge-color="#bac5d9" data-badge-ink="#202936" role="img">
+<title>Virtual audio cable</title>
+<defs><linearGradient id="background" x1="6" y1="6" x2="138" y2="138" gradientUnits="userSpaceOnUse"><stop stop-color="#3a4252"/><stop offset="1" stop-color="#202936"/></linearGradient><linearGradient id="symbol" x1="28" y1="24" x2="116" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#c4cdde"/><stop offset="1" stop-color="#bac5d9"/></linearGradient></defs>
+<rect width="144" height="144" rx="35" fill="url(#background)"/>
+<g id="device-symbol" fill="url(#symbol)"><rect x="23" y="37" width="40" height="33" rx="7"/><rect x="81" y="74" width="40" height="33" rx="7"/><rect x="31" y="45" width="24" height="17" rx="3" fill="#202936"/><rect x="89" y="82" width="24" height="17" rx="3" fill="#202936"/><path d="M43 70V84Q43 91 52 91H75M101 74V60Q101 53 92 53H69" fill="none" stroke="url(#symbol)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M70 85L76 91L70 97M74 47L68 53L74 59" fill="none" stroke="url(#symbol)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>
+<!-- POSITION_BADGE_START --><!-- POSITION_BADGE_END -->
+</svg>

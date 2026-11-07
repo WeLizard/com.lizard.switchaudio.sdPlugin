@@ -1,48 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg id="a" data-name="device1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 144 144">
-  <defs>
-    <style>
-      .f {
-        fill: url(#d);
-      }
-
-      .g {
-        isolation: isolate;
-      }
-
-      .h {
-        fill: url(#e);
-      }
-
-      .i {
-        fill: #0d2137;
-      }
-
-      .j {
-        fill: #4fc3f7;
-      }
-    </style>
-    <linearGradient id="d" data-name="Безымянный градиент" x1="6" y1="372" x2="138" y2="504" gradientTransform="translate(0 -366)" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1e3a5f"/>
-      <stop offset="1" stop-color="#0d2137"/>
-    </linearGradient>
-    <linearGradient id="e" data-name="Безымянный градиент 4" x1="37.21" y1="108.27" x2="114.52" y2="30.95" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#4fc3f7"/>
-      <stop offset="1" stop-color="#29b6f6"/>
-    </linearGradient>
-  </defs>
-  <g id="b" data-name="_Слой_1">
-    <g id="c" data-name="_Слой_1-2">
-      <rect class="f" x="0" y="0" width="144" height="144" rx="35" ry="35"/>
-      <path class="h" d="M72,24c-24,0-44,20-44,44v24c0,6.6,5.4,12,12,12h8.1s0,0,0,0c3.27-.05,5.9-2.72,5.9-5.99v-24c0-2.69-1.77-4.96-4.2-5.73.07-1.42.14-2.85.2-4.27,0-12.1,9.9-22,22-22s22,9.9,22,22c.07,1.42.15,2.85.22,4.27-2.45.76-4.22,3.04-4.22,5.73v24c0,3.31,2.69,6,6,6h8c6.6,0,12-5.4,12-12v-24c0-24-20-44-44-44Z"/>
-      <circle class="j" cx="72" cy="120" r="12"/>
-      <g class="g">
-        <g class="g">
-          <g class="g">
-            <path class="i" d="M73.61,125h-1.92v-7.24c-.7.66-1.53,1.14-2.48,1.46v-1.74c.5-.16,1.05-.48,1.63-.93.59-.46.99-.99,1.21-1.6h1.56v10.06Z"/>
-          </g>
-        </g>
-      </g>
-    </g>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144" data-device-kind="speakers_small" data-badge-color="#4fc3f7" data-badge-ink="#0d2137" role="img">
+<title>Small speakers</title>
+<defs><linearGradient id="background" x1="6" y1="6" x2="138" y2="138" gradientUnits="userSpaceOnUse"><stop stop-color="#1e3a5f"/><stop offset="1" stop-color="#0d2137"/></linearGradient><linearGradient id="symbol" x1="28" y1="24" x2="116" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#4fc3f7"/><stop offset="1" stop-color="#4fc3f7"/></linearGradient></defs>
+<rect width="144" height="144" rx="35" fill="url(#background)"/>
+<g id="device-symbol" fill="url(#symbol)"><rect x="28" y="44" width="36" height="60" rx="5.76"/><g fill="#0d2137"><circle cx="46.0" cy="59.0" r="5.040000000000001"/><circle cx="46.0" cy="83.6" r="11.88"/></g><circle cx="46.0" cy="83.6" r="5.76" opacity=".5"/><rect x="80" y="44" width="36" height="60" rx="5.76"/><g fill="#0d2137"><circle cx="98.0" cy="59.0" r="5.040000000000001"/><circle cx="98.0" cy="83.6" r="11.88"/></g><circle cx="98.0" cy="83.6" r="5.76" opacity=".5"/></g>
+<!-- POSITION_BADGE_START --><!-- POSITION_BADGE_END -->
 </svg>
