@@ -5,7 +5,7 @@ chain of exact-text str.replace calls. The real sources now live in plugin/ and 
 compiled directly, so the tree you read is the tree that ships.
 """
 from pathlib import Path
-import hashlib, json, os, queue, shutil, subprocess, threading, time
+import hashlib, json, os, queue, re, shutil, subprocess, threading, time
 
 root = Path(__file__).resolve().parents[1]
 out = root / 'build'
@@ -19,12 +19,50 @@ csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe
 if not csc.is_file():
     raise SystemExit(f'.NET Framework compiler not found: {csc}')
 
+
+sdk_roots = [Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')),
+             Path(os.environ.get('ProgramFiles', r'C:\Program Files'))]
+
+
+def newest_winmd():
+    hits = [p for root in sdk_roots
+            for p in (root / 'Windows Kits/10/UnionMetadata').glob('*/Windows.winmd')
+            if p.is_file() and re.fullmatch(r'\d+(\.\d+)+', p.parent.name)]
+    if not hits:
+        raise SystemExit('Windows SDK UnionMetadata/Windows.winmd not found')
+    return sorted(hits, key=lambda p: tuple(int(n) for n in p.parent.name.split('.')))[-1]
+
+
+def newest_facades():
+    hits = [d for root in sdk_roots
+            for d in (root / 'Reference Assemblies/Microsoft/Framework/.NETFramework').glob('v4.*/Facades')
+            if (d / 'System.Runtime.dll').is_file() and re.fullmatch(r'v\d+(\.\d+)+', d.parent.name)]
+    if not hits:
+        raise SystemExit('.NET Framework 4.x Facades not found')
+    return sorted(hits, key=lambda d: tuple(int(n) for n in d.parent.name[1:].split('.')))[-1]
+
+
+winmd = newest_winmd()
+facades = newest_facades()
+winrt_interop = csc.parent / 'System.Runtime.WindowsRuntime.dll'
+if not winrt_interop.is_file():
+    raise SystemExit(f'WinRT interop assembly not found: {winrt_interop}')
+
+print(f'winmd:   {winmd}')
+print(f'facades: {facades}')
+
 exe = out / 'AudioSwitch.exe'
-subprocess.run(
-    [str(csc), '/nologo', '/optimize+', '/platform:anycpu', '/target:exe',
-     f'/out:{exe}', *[str(s) for s in sources]],
-    cwd=out, check=True, timeout=120,
-)
+compile_cmd = [str(csc), '/nologo', '/preferreduilang:en-US', '/optimize+', '/platform:anycpu', '/target:exe',
+               f'/out:{exe}', f'/r:{winmd}', f'/r:{winrt_interop}',
+               *[f'/r:{p}' for p in sorted(facades.glob('*.dll'))],
+               *[str(s) for s in sources]]
+compiled = subprocess.run(compile_cmd, cwd=out, capture_output=True, timeout=180)
+if compiled.returncode != 0:
+    print(compiled.stdout.decode('utf-8', 'replace'))
+    print(compiled.stderr.decode('utf-8', 'replace'))
+    raise SystemExit(f'csc failed with exit code {compiled.returncode}')
+if compiled.stdout.strip():
+    print(compiled.stdout.decode('utf-8', 'replace').strip())
 
 checks = []
 
@@ -46,12 +84,41 @@ checks.append('six ABI/JSON self-tests')
 assert call(['telemetry-selftest'])['tests'] == 2
 checks.append('notification generation and telemetry serialization self-tests')
 
-frame = call(['snapshot-v2'])
-assert frame['schemaVersion'] == 2 and frame['success'] and frame['session'] and frame['revision'] == 1
+# The distributed 1.5.0 helper was quarantined as Trojan:Win32/Bearfoos.A!ml. Synthetic
+# keystroke injection was the malware-shaped part of its API surface; keep it out.
+for source in sources:
+    assert 'keybd_event' not in source.read_text(encoding='utf-8'), f'{source.name} reintroduces synthetic keystrokes'
+checks.append('no synthetic keystroke API in native sources')
+
+media_test = call(['media-selftest'])
+assert media_test['tests'] >= 4 and media_test['success']
+checks.append(f"media self-tests (SMTC available={media_test['available']})")
+
+media = call(['media'])
+assert media['success'] and isinstance(media['media']['available'], bool)
+if media['media']['available']:
+    assert isinstance(media['media']['sessionCount'], int)
+checks.append('media status contract')
+
+assert call(['running', 'chrome'], False)['success'] is False
+assert call(['launch', 'anything'], False)['success'] is False
+assert call(['soundsettings'], False)['success'] is False
+checks.append('process launch/enumeration moved out of the native helper')
+
+frame = call(['snapshot-v3'])
+assert frame['schemaVersion'] == 3 and frame['success'] and frame['session'] and frame['revision'] == 1
 for flow in ['output', 'input']:
     assert isinstance(frame['flows'][flow]['inventory']['complete'], bool)
     assert set(frame['flows'][flow]['defaults']) == {'console', 'multimedia', 'communications'}
-checks.append('snapshot-v2 contract on Windows (no physical endpoint required)')
+assert isinstance(frame['media']['available'], bool)
+if frame['media']['available']:
+    assert isinstance(frame['media']['sessionCount'], int)
+    session = frame['media']['session']
+    if session is not None:
+        assert isinstance(session['source'], str) and session['source']
+        assert set(session['controls']) == {'play', 'pause', 'stop', 'next', 'previous',
+                                          'record', 'channelUp', 'channelDown'}
+checks.append('snapshot-v3 contract incl. media block (no physical endpoint required)')
 (out / 'windows-snapshot.json').write_text(json.dumps(frame, ensure_ascii=False, indent=2), encoding='utf-8')
 
 assert call(['list', 'invalid'], False)['success'] is False
@@ -71,7 +138,7 @@ def reader():
 threading.Thread(target=reader, daemon=True).start()
 try:
     first = json.loads(lines.get(timeout=8))
-    assert first['schemaVersion'] == 2
+    assert first['schemaVersion'] == 3
     process.stdin.write('x' * 300 + '\nrefresh 2\nrefresh 7\n')
     process.stdin.flush()
     deadline = time.monotonic() + 8
@@ -100,9 +167,9 @@ relocated_dir.mkdir(exist_ok=True)
 try:
     relocated = relocated_dir / 'AudioSwitch.exe'
     shutil.copyfile(exe, relocated)
-    answer = subprocess.run([str(relocated), 'snapshot-v2'], capture_output=True,
+    answer = subprocess.run([str(relocated), 'snapshot-v3'], capture_output=True,
                             encoding='utf-8-sig', timeout=15, check=True)
-    assert json.loads(answer.stdout)['schemaVersion'] == 2
+    assert json.loads(answer.stdout)['schemaVersion'] == 3
     checks.append('native helper runs in a relocated Unicode/spaced path')
 finally:
     shutil.rmtree(relocated_dir, ignore_errors=True)
@@ -123,6 +190,4 @@ report = {
 print(json.dumps(report, ensure_ascii=False, indent=2))
 
 assert package['version'] == manifest_version, 'manifest.json and plugin/package.json versions differ'
-# audioHelperVersion is the helper's own declaration; it may lag the plugin version.
-declared_helper = package.get('audioHelperVersion', manifest_version)
-assert helper_version == declared_helper, f'helper reports {helper_version}, package declares {declared_helper}'
+assert helper_version == manifest_version, f'helper reports {helper_version}, manifest declares {manifest_version}'

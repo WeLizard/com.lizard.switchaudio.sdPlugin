@@ -107,7 +107,7 @@ function createTelemetry({helper, spawnWatch = null, now = () => performance.now
                     const through = ticket, readOwner = owner;
                     lastFallback = now();
                     try {
-                        const data = await helper(['snapshot-v2']);
+                        const data = await helper(['snapshot-v3']);
                         if (!State.validSnapshot(data)) throw new Error('Incompatible audio snapshot; install the complete plugin package.');
                         if (!closed && owner === readOwner && !child) publish(data);
                     } catch (e) {

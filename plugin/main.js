@@ -11,6 +11,8 @@ const helperPath = path.join(__dirname, 'AudioSwitch.exe');
 function nativeHelper(args) {
     return new Promise((resolve, reject) => {
         execFile(helperPath, args.map(String), {encoding: 'utf8', windowsHide: true, timeout: 8000, maxBuffer: 1024 * 1024}, (error, stdout) => {
+            if (error && error.code === 'ENOENT')
+                return reject(new Error('AudioSwitch.exe not found. Reinstall the plugin or check your antivirus quarantine.'));
             let result;
             try { result = JSON.parse((stdout || '').replace(/^\uFEFF/, '').trim()); }
             catch { return reject(new Error(error ? `Audio helper failed: ${error.code || error.message}` : 'Invalid response from AudioSwitch.exe')); }
@@ -21,12 +23,21 @@ function nativeHelper(args) {
     });
 }
 
+function launchUri(uri) {
+    return new Promise((resolve, reject) => {
+        if (!/^[A-Za-z0-9._!:\\-]+$/.test(uri)) return reject(new Error('Invalid application identifier.'));
+        execFile('cmd.exe', ['/d', '/s', '/c', `start "" "${uri}"`], {windowsHide: true, timeout: 10000}, error => {
+            if (error) reject(new Error('Could not launch the application.')); else resolve();
+        });
+    });
+}
+
 function createController({helper = nativeHelper, send, image, log = () => {}, now = () => performance.now(),
-    delay = ms => new Promise(r => setTimeout(r, ms)), telemetry = null} = {}) {
+    delay = ms => new Promise(r => setTimeout(r, ms)), launch = launchUri, telemetry = null} = {}) {
     const monitor = telemetry || createTelemetry({helper, now, log});
     const contexts = new Map(), held = new Map(), rendered = new Map(), releases = new Set(), pending = new Set(), work = new Set();
     const queues = {audio: Promise.resolve(), ptt: Promise.resolve(), media: Promise.resolve()};
-    let stopped = false, epoch = 0;
+    let stopped = false, epoch = 0, lastMediaSource = null;
     const emit = (event, context, payload, action) => send({event, context, ...(payload === undefined ? {} : {payload}), ...(action ? {action} : {})});
     function fail(context, error, action) {
         const message = error instanceof Error ? error.message : String(error);
@@ -82,10 +93,19 @@ function createController({helper = nativeHelper, send, image, log = () => {}, n
         } else if (action === 'setvolume') {
             const volume = S.number(s.targetVolume, 50, 0, 100);
             paint(context, 'volume_' + (volume === 0 ? 0 : Math.ceil(volume / 25) * 25));
-        } else if (action === 'playpause') paint(context, 'play');
+        } else if (action === 'playpause') {
+            const media = State.mediaSession(sample, now());
+            paint(context, 'play', 0, media ? (media.title || media.artist || '') : '');
+        }
     }
     function renderAll() { for (const [context, record] of contexts) if (record.visible) render(context, record); }
-    monitor.subscribe(() => { if (!stopped) renderAll(); });
+    monitor.subscribe(() => {
+        if (!stopped) {
+            const media = State.mediaSession(monitor.getSample(), now());
+            if (media && media.source) lastMediaSource = media.source;
+            renderAll();
+        }
+    });
     async function refresh() { const sample = await monitor.refresh(); renderAll(); return sample; }
     async function release(context) {
         const id = held.get(context);
@@ -141,18 +161,20 @@ function createController({helper = nativeHelper, send, image, log = () => {}, n
                     renderAll(); return; // Do not hold the PTT lane waiting for telemetry.
                 }
                 case 'playpause': {
-                    const appPath = S.text(s.appPath, 2048);
-                    if (appPath) {
-                        let name = S.text(s.processName, 260);
-                        if (!name && /\.exe$/i.test(appPath)) name = path.win32.basename(appPath);
-                        if (!name) throw new Error('Set the process name when launching a shortcut or application URI.');
-                        if (!(await helper(['running', name])).running) { if (!current()) return; await helper(['launch', appPath]); await delay(1500); }
+                    try { await helper(['media', 'playpause']); }
+                    catch (e) {
+                        if (!current()) return;
+                        if (/Nothing is playing/i.test(e.message) && lastMediaSource) {
+                            await launch('shell:AppsFolder\\' + lastMediaSource);
+                            await delay(2000);
+                            if (current()) await helper(['media', 'playpause']);
+                        } else throw e;
                     }
-                    if (current()) await helper(['media', 'playpause']); break;
+                    break;
                 }
                 case 'medianext': await helper(['media', 'next']); break;
                 case 'mediaprev': await helper(['media', 'previous']); break;
-                case 'soundsettings': await helper(['soundsettings']); break;
+                case 'soundsettings': await launch('ms-settings:sound'); break;
                 default: return;
             }
             // Status updates run independently of the PTT/media command lane.
@@ -173,6 +195,12 @@ function createController({helper = nativeHelper, send, image, log = () => {}, n
             try { const devices = await helper(['list', deviceType]); emit('sendToPropertyInspector', context, {devices, deviceType, requestId: payload.requestId}, action); }
             catch (e) { emit('sendToPropertyInspector', context, {error: e.message, deviceType, requestId: payload.requestId}, action); }
         })();
+        if (event === 'sendToPlugin' && payload.requestMedia) {
+            const sample = monitor.getSample();
+            const media = State.fresh(sample, now()) ? sample.data.media : {available: false, session: null};
+            emit('sendToPropertyInspector', context, {media}, action);
+            return;
+        }
         if (event === 'sendToPlugin' && payload.requestIndicator) {
             const settings = S.normalize(payload.settings || contexts.get(context)?.settings || {});
             const v = model(settings);
@@ -242,4 +270,4 @@ function run() {
     connect();
 }
 if (require.main === module) run();
-module.exports = {createController, nativeHelper};
+module.exports = {createController, nativeHelper, launchUri};

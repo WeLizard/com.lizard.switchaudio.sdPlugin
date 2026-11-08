@@ -1,7 +1,7 @@
 name: Windows build and package
 on:
   push:
-    branches: [main, 'astra/**']
+    branches: [main, 'astra/**', 'feature/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -45,7 +45,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
           node tools/package.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Packaging validation failed' }
-          & powershell.exe -NoProfile -File dist\AudioSwitch-1.4.0-StreamDock\Install-StreamDock.ps1 -ValidateOnly
+          $ver = (Get-Content manifest.json | ConvertFrom-Json).Version
+          & powershell.exe -NoProfile -File "dist\AudioSwitch-$ver-StreamDock\Install-StreamDock.ps1" -ValidateOnly
           if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell package validation failed' }
           & powershell.exe -NoProfile -File tools\install-smoke.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Installer smoke test failed' }

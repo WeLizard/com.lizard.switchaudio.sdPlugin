@@ -1,7 +1,44 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Media launch</title><style>body{background:#2d2d2d;color:#eee;font:12px/1.4 "Segoe UI",sans-serif;padding:8px;margin:0}main{max-width:580px}label{display:block;margin:5px 0}input{width:100%;max-width:460px;display:block;padding:5px;background:#202020;color:#fff;border:1px solid #666;border-radius:4px}small{display:block;color:#bbb;max-width:460px}</style></head><body><main><label><span id="pathLabel">Application path or URI (optional)</span><input id="path" placeholder="C:\Program Files\Player\player.exe"></label><label><span id="processLabel">Process name</span><input id="process" placeholder="player.exe"></label><small id="hint">Paste the full Windows path. For shortcuts or URIs, specify the running process name. Play/Pause sends a media key; it is not playback status.</small></main><script>
-let socket,uuid,settings={};const pathField=document.getElementById('path'),processField=document.getElementById('process');
-function render(){pathField.value=settings.appPath||'';processField.value=settings.processName||'';}
-function connectElgatoStreamDeckSocket(port,id,event,info,actionInfo){uuid=id;settings=JSON.parse(actionInfo).payload.settings||{};const lang=JSON.parse(info).application?.language||'en';if(lang.startsWith('ru')){document.getElementById('pathLabel').textContent='Путь к программе или URI (необязательно)';document.getElementById('processLabel').textContent='Имя процесса';document.getElementById('hint').textContent='Вставь полный путь Windows. Для ярлыка или URI укажи реальное имя процесса. Play/Pause отправляет медиа-клавишу, но не отображает состояние плеера.';}else if(lang.startsWith('zh')){document.getElementById('pathLabel').textContent='应用路径或 URI（可选）';document.getElementById('processLabel').textContent='进程名称';document.getElementById('hint').textContent='输入完整路径。快捷方式或 URI 必须指定进程名称。播放按键不表示实时播放状态。';}render();socket=new WebSocket('ws://127.0.0.1:'+port);socket.onopen=()=>socket.send(JSON.stringify({event,uuid}));socket.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.event==='didReceiveSettings'){settings=d.payload.settings||{};render();}}catch{}};}
-function save(){settings.appPath=pathField.value.trim();settings.processName=processField.value.trim();if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({event:'setSettings',context:uuid,payload:settings}));}
-pathField.onchange=save;processField.onchange=save;
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Play / Pause</title><style>
+body{background:#2d2d2d;color:#eee;font:13px/1.5 "Segoe UI",sans-serif;padding:12px;margin:0}main{max-width:480px}
+h1{font-size:14px;margin:0 0 8px}p{margin:6px 0;color:#ccc}
+.card{background:#202020;border:1px solid #555;border-radius:8px;padding:12px;margin:10px 0}
+.track{font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.artist{color:#aaa;font-size:12px}.app{color:#82d4ed;font-size:11px;margin-top:4px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.playing{background:#1b4d2e;color:#6fdc8c}.paused{background:#4d3b1b;color:#f0c060}.idle{background:#333;color:#999}
+small{display:block;color:#999;margin-top:10px;font-size:11px}
+</style></head><body><main>
+<h1 id="title">Play / Pause</h1>
+<p id="desc">This button controls whatever is playing on your PC right now. No setup needed — it finds the app automatically.</p>
+<div class="card" id="status-card">
+  <span class="badge idle" id="badge">Waiting</span>
+  <div class="track" id="track"></div>
+  <div class="artist" id="artist"></div>
+  <div class="app" id="app"></div>
+</div>
+<small id="hint">The track name appears on the key. If nothing is playing, the button will try to reopen your last music app.</small>
+</main><script>
+let socket,uuid,lang='en';
+const texts={
+  en:{title:'Play / Pause',desc:'This button controls whatever is playing on your PC right now. No setup needed — it finds the app automatically.',hint:'The track name appears on the key. If nothing is playing, the button will try to reopen your last music app.',waiting:'Nothing playing',playing:'Playing',paused:'Paused'},
+  ru:{title:'Play / Pause',desc:'Кнопка управляет тем, что сейчас играет на компьютере. Настройка не нужна — приложение определяется автоматически.',hint:'Название трека отображается на кнопке. Если ничего не играет, кнопка попробует открыть последнее музыкальное приложение.',waiting:'Ничего не играет',playing:'Играет',paused:'Пауза'},
+  zh:{title:'Play / Pause',desc:'此按钮控制电脑上正在播放的内容。无需设置，自动识别应用。',hint:'曲目名称显示在按键上。如果没有播放内容，按钮会尝试打开上次的音乐应用。',waiting:'没有播放',playing:'播放中',paused:'已暂停'}
+};
+function t(k){return texts[lang][k]||texts.en[k];}
+function render(){document.getElementById('title').textContent=t('title');document.getElementById('desc').textContent=t('desc');document.getElementById('hint').textContent=t('hint');}
+function showMedia(media){
+  const badge=document.getElementById('badge'),track=document.getElementById('track'),artist=document.getElementById('artist'),app=document.getElementById('app');
+  if(!media||!media.session){badge.textContent=t('waiting');badge.className='badge idle';track.textContent='';artist.textContent='';app.textContent='';return;}
+  const s=media.session,playing=s.playbackStatus==='Playing';
+  badge.textContent=playing?t('playing'):t('paused');badge.className='badge '+(playing?'playing':'paused');
+  track.textContent=s.title||'';artist.textContent=s.artist||'';app.textContent=s.source||'';
+}
+function connectElgatoStreamDeckSocket(port,id,event,info,actionInfo){
+  uuid=id;const parsed=JSON.parse(info);lang=(parsed.application?.language||'en').startsWith('ru')?'ru':(parsed.application?.language||'').startsWith('zh')?'zh':'en';
+  render();socket=new WebSocket('ws://127.0.0.1:'+port);
+  socket.onopen=()=>{socket.send(JSON.stringify({event,uuid}));socket.send(JSON.stringify({event:'sendToPlugin',context:uuid,action:JSON.parse(actionInfo).action,payload:{requestMedia:true}}));};
+  socket.onmessage=e=>{try{const d=JSON.parse(e.data),p=d.payload||{};if(d.event==='sendToPropertyInspector'&&p.media)showMedia(p.media);if(d.event==='didReceiveSettings')render();}catch{}};
+  setInterval(()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({event:'sendToPlugin',context:uuid,action:'com.lizard.switchaudio.playpause',payload:{requestMedia:true}}));},2000);
+}
+render();
 </script></body></html>

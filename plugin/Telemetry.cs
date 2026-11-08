@@ -24,7 +24,7 @@ namespace AudioSwitch
         public readonly AutoResetEvent Changed = new AutoResetEvent(false);
         long generation;
         public long Generation { get { return Interlocked.Read(ref generation); } }
-        int Signal() { Interlocked.Increment(ref generation); Changed.Set(); return 0; }
+        public int Signal() { Interlocked.Increment(ref generation); Changed.Set(); return 0; }
         public int OnDeviceStateChanged(string id, uint state) { return Signal(); }
         public int OnDeviceAdded(string id) { return Signal(); }
         public int OnDeviceRemoved(string id) { return Signal(); }
@@ -141,11 +141,12 @@ namespace AudioSwitch
         sealed class TelemetryHost : IDisposable {
             IMMDeviceEnumerator enumerator;
             readonly DeviceNotifications notifications = new DeviceNotifications();
+            readonly MediaWatcher mediaWatcher;
             readonly string session = Guid.NewGuid().ToString("N");
             long revision;
             bool registered;
             public DeviceNotifications Notifications { get { return notifications; } }
-            public TelemetryHost() { TryConnect(); }
+            public TelemetryHost() { mediaWatcher = new MediaWatcher(notifications); TryConnect(); }
             void TryConnect() {
                 if (enumerator == null) { try { enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator(); } catch { return; } }
                 if (!registered) {
@@ -161,7 +162,7 @@ namespace AudioSwitch
             }
             public string Capture(long requestId) {
                 TryConnect();
-                Dictionary<string, object> flows = null, controls = null;
+                Dictionary<string, object> flows = null, controls = null, mediaInfo = null;
                 bool consistent = false; long generation = 0;
                 // Windows has no atomic multi-role read. Double-read plus callback generation
                 // protects against visible churn; bounded retries never claim transactional atomicity.
@@ -170,24 +171,26 @@ namespace AudioSwitch
                     var first = ReadFlows(); flows = ReadFlows();
                     controls = Obj("output", enumerator == null ? null : Controls(enumerator, (Dictionary<string, object>)flows["output"], 0),
                         "input", enumerator == null ? null : Controls(enumerator, (Dictionary<string, object>)flows["input"], 1));
+                    mediaInfo = MediaInfo(mediaWatcher);
                     consistent = generation == notifications.Generation && Json(first) == Json(flows);
                     if (consistent) break;
                 }
-                return Json(Obj("success", true, "schemaVersion", 2, "version", Version,
+                return Json(Obj("success", true, "schemaVersion", 3, "version", Version,
                     "session", session, "revision", ++revision, "requestId", requestId,
                     "generation", notifications.Generation, "consistent", consistent, "watching", registered,
-                    "flows", flows, "controls", controls));
+                    "flows", flows, "controls", controls, "media", mediaInfo));
             }
             public void Dispose() {
                 if (registered && enumerator != null) {
                     try { Hr(enumerator.UnregisterEndpointNotificationCallback(notifications)); } catch { }
                 }
                 registered = false; Release(enumerator); enumerator = null;
+                mediaWatcher.Dispose();
                 GC.KeepAlive(notifications);
             }
         }
 
-        static string SnapshotV2() { using (var host = new TelemetryHost()) return host.Capture(0); }
+        static string SnapshotV3() { using (var host = new TelemetryHost()) return host.Capture(0); }
         static int Watch() {
             using (var host = new TelemetryHost()) {
                 int stopping = 0; long requested = 0;
@@ -244,7 +247,7 @@ namespace AudioSwitch
             sink.OnDeviceStateChanged("a", 8); sink.OnPropertyValueChanged("a", new PropertyKey(Guid.Empty, 0));
             if (sink.Generation != 5 || !sink.Changed.WaitOne(0)) throw new Exception("Notification generation test failed");
             if (Json(Obj("id", null, "state", 1, "ok", true)) != "{\"id\":null,\"state\":1,\"ok\":true}") throw new Exception("Telemetry serializer test failed");
-            return "{\"success\":true,\"schemaVersion\":2,\"tests\":2}";
+            return "{\"success\":true,\"schemaVersion\":3,\"tests\":2}";
         }
     }
 }

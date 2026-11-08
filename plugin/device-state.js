@@ -4,9 +4,17 @@ const ROLES = Object.freeze({all: ['console', 'multimedia', 'communications'], m
 const MAX_AGE_MS = 5000;
 const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 function validSnapshot(s) {
-    if (!object(s) || s.success !== true || s.schemaVersion !== 2 || typeof s.consistent !== 'boolean' ||
+    if (!object(s) || s.success !== true || s.schemaVersion !== 3 || typeof s.consistent !== 'boolean' ||
         typeof s.session !== 'string' || !s.session || s.session.length > 128 ||
         !Number.isSafeInteger(s.revision) || s.revision < 1 || !object(s.flows)) return false;
+    if (!object(s.media) || typeof s.media.available !== 'boolean') return false;
+    if (s.media.available) {
+        if (!Number.isSafeInteger(s.media.sessionCount) || s.media.sessionCount < 0) return false;
+        if (s.media.session !== null) {
+            const m = s.media.session;
+            if (!object(m) || typeof m.source !== 'string' || !m.source || !object(m.controls)) return false;
+        }
+    }
     for (const type of ['output', 'input']) {
         const f = s.flows[type];
         if (!object(f) || !object(f.inventory) || !object(f.defaults)) return false;
@@ -55,4 +63,8 @@ function availableDevices(sample, type, now, roles = 'all') {
         default: flow.defaults.console.id === d.id, defaultMultimedia: flow.defaults.multimedia.id === d.id,
         defaultComm: flow.defaults.communications.id === d.id}));
 }
-module.exports = {ROLES, MAX_AGE_MS, validSnapshot, fresh, classify, defaultId, availableDevices};
+function mediaSession(sample, now) {
+    if (!fresh(sample, now) || !sample.data.media.available) return null;
+    return sample.data.media.session || null;
+}
+module.exports = {ROLES, MAX_AGE_MS, validSnapshot, fresh, classify, defaultId, availableDevices, mediaSession};

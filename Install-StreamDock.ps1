@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $id = 'com.lizard.switchaudio.sdPlugin'
 $source = Join-Path $PSScriptRoot $id
 if (!(Test-Path -LiteralPath $source -PathType Container)) { throw 'Extract the complete ZIP before running the installer.' }
-$required = @('manifest.json','property.html','property.js','property-appvolume.html','plugin\main.js','plugin\settings.js','plugin\AudioSwitch.exe','plugin\node_modules\ws\package.json')
+$required = @('manifest.json','property.html','property.js','property-play.html','property-mute.html','property-volume.html','property-step.html','property-ptt.html','property-appvolume.html','plugin\main.js','plugin\settings.js','plugin\device-catalog.js','plugin\device-state.js','plugin\telemetry.js','plugin\icons.js','plugin\icon-digits.json','plugin\AudioSwitch.exe','plugin\node_modules\ws\package.json')
 foreach ($file in $required) { if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Incomplete package: $file" } }
 $manifest = Get-Content -LiteralPath (Join-Path $source 'manifest.json') -Raw | ConvertFrom-Json
 $helper = Join-Path $source 'plugin\AudioSwitch.exe'
@@ -21,7 +21,9 @@ foreach ($line in Get-Content -LiteralPath $checksumFile) {
     if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw "Damaged package: $relative" }
 }
 if ($ValidateOnly) { Write-Host 'Package validation passed.'; return }
-if (Get-Process -Name 'StreamDock*' -ErrorAction SilentlyContinue) { throw 'Exit StreamDock from its system-tray menu, then run this installer again.' }
+# Match host executables only: plugin helpers such as "streamdockSwitchAudio" are not the host.
+$hostRunning = Get-Process -Name 'StreamDock','Stream Dock*' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path -notlike '*\plugins\*' }
+if ($hostRunning) { throw 'Exit StreamDock from its system-tray menu, then run this installer again.' }
 if (!$env:APPDATA) { throw 'APPDATA is not defined.' }
 $hostRoot = Join-Path $env:APPDATA 'HotSpot\StreamDock'
 if (!(Test-Path -LiteralPath $hostRoot -PathType Container)) { throw 'StreamDock user-data directory was not found. Install and run StreamDock first. This is not an Elgato installer.' }
@@ -44,9 +46,17 @@ try {
         Move-Item -LiteralPath $target -Destination $backup
         $moved = $true
     }
-    try { Move-Item -LiteralPath $staging -Destination $target }
+    try {
+        Move-Item -LiteralPath $staging -Destination $target
+        if (!(Test-Path -LiteralPath (Join-Path $target 'plugin\AudioSwitch.exe'))) {
+            throw 'AudioSwitch.exe vanished during install — antivirus quarantine is likely. Restore it from protection history (or add a Defender exclusion for the plugin folder yourself), then run the installer again.'
+        }
+    }
     catch {
-        if ($moved -and !(Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $backup -Destination $target }
+        if ($moved) {
+            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+            Move-Item -LiteralPath $backup -Destination $target
+        }
         throw
     }
     Write-Host "Installed Audio Switch Pro $($manifest.Version). Start StreamDock and configure the device list."

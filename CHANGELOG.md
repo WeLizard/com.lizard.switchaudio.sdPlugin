@@ -1,3 +1,16 @@
+# 2.0.0 — real media control, zero configuration
+
+- Media buttons now drive the app that is actually playing via Windows SMTC (System Media Transport Controls),
+  including UWP apps such as Yandex.Music. No process name, path or URI configuration anymore.
+- Play/Pause, Next and Previous act on the current Windows media session; unsupported commands fail explicitly.
+- The track title appears on the Play/Pause key; the inspector shows a live track/artist/app status card.
+- If nothing is playing, Play/Pause reopens the last music app and retries.
+- Telemetry schema v3: media state is pushed with audio state; media events wake the watcher immediately.
+- Removed synthetic media keystrokes and the native process-launch surface; Sound Settings opens via Windows URI from JS.
+- Friendly diagnosis when AudioSwitch.exe is missing (antivirus quarantine), instead of a bare ENOENT.
+- Installer verifies every runtime module and rolls back if antivirus removes the helper during install.
+- Play/Pause inspector rewritten: no fields to fill in, localized status (en/ru/zh).
+
 # 1.4.0 — multi-device / packaging validation candidate
 
 - Replace the hard-coded pair with an ordered list of up to 32 endpoints; legacy settings still work.

@@ -7,7 +7,8 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=name=>JSON.parse(fs.readFileSync(path.join(root,name),'utf8'));
 const manifest=read('manifest.json'),pkg=read('plugin/package.json');
 const id='com.lizard.switchaudio.sdPlugin';
-const output=path.join(root,'dist'),bundle=path.join(output,'AudioSwitch-1.4.0-StreamDock'),stage=path.join(bundle,id);
+const version=manifest.Version;
+const output=path.join(root,'dist'),bundle=path.join(output,`AudioSwitch-${version}-StreamDock`),stage=path.join(bundle,id);
 function check(name){
     if(typeof name!=='string'||path.isAbsolute(name)||name.split(/[\\/]/).includes('..'))throw new Error('Unsafe package path: '+name);
     const resolved=path.join(root,name);
@@ -36,7 +37,7 @@ const rootFiles=fs.readdirSync(root).filter(n=>/^(property.*\.(html|js)|manifest
 for(const name of rootFiles)fs.copyFileSync(check(name),path.join(stage,name));
 fs.cpSync(path.join(root,'images'),path.join(stage,'images'),{recursive:true});
 fs.mkdirSync(path.join(stage,'plugin'),{recursive:true});
-for(const name of ['main.js','settings.js','package.json','package-lock.json','AudioSwitch.exe'])fs.copyFileSync(check('plugin/'+name),path.join(stage,'plugin',name));
+for(const name of ['main.js','settings.js','device-catalog.js','device-state.js','telemetry.js','icons.js','icon-digits.json','package.json','package-lock.json','AudioSwitch.exe'])fs.copyFileSync(check('plugin/'+name),path.join(stage,'plugin',name));
 fs.cpSync(check('plugin/node_modules/ws'),path.join(stage,'plugin/node_modules/ws'),{recursive:true});
 for(const name of ['Install-StreamDock.ps1','Install-StreamDock.bat','README_ru.md','README.md','CHANGELOG.md'])fs.copyFileSync(check(name),path.join(bundle,name));
 const hashes=[];
@@ -52,5 +53,5 @@ function zip(directory,destination){
         const record=Buffer.alloc(46);record.writeUInt32LE(0x02014b50);record.writeUInt16LE(20,4);record.writeUInt16LE(20,6);record.writeUInt16LE(0x800,8);record.writeUInt16LE(33,14);record.writeUInt32LE(crc,16);record.writeUInt32LE(data.length,20);record.writeUInt32LE(data.length,24);record.writeUInt16LE(name.length,28);record.writeUInt32LE(offset,42);central.push(record,name);offset+=local.length+name.length+data.length;}
     const directoryData=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(directoryData.length,12);end.writeUInt32LE(offset,16);fs.writeFileSync(destination,Buffer.concat([...chunks,directoryData,end]));
 }
-zip(bundle,path.join(output,'AudioSwitch-1.4.0-StreamDock.zip'));
+zip(bundle,path.join(output,`AudioSwitch-${version}-StreamDock.zip`));
 console.log('Package validated: '+hashes.length+' files. Mandatory helper, inspectors, icons, dependencies and checksums included.');

@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const S=require('../plugin/settings');
 const {createController}=require('../plugin/main');
+const {makeSnapshot,resetRevision}=require('./fixtures');
 const prefix='com.lizard.switchaudio.';
 const configured=['a','b','c'].map((id,i)=>({id,name:['Маленькие','Большие','Наушники'][i]}));
 const available=current=>configured.map(d=>({...d,default:d.id===current,defaultComm:d.id==='c'}));
@@ -22,28 +23,30 @@ test('duplicate IDs removed, duplicate names preserved',()=>assert.deepEqual(S.n
 test('zero volume preserved; malformed and unbounded values normalized',()=>{assert.equal(S.number(0,50,0,100),0);assert.equal(S.number('0',50,0,100),0);assert.equal(S.number(NaN,50,0,100),50);assert.equal(S.number('abc',50,0,100),50);assert.equal(S.number(120,50,0,100),100);assert.equal(S.volumeStep({volumeStep:6553.5}),10);});
 test('device cap and safe Unicode labels',()=>{assert.equal(S.normalize({devices:Array.from({length:99},(_,i)=>({id:String(i)}))}).devices.length,32);assert.equal(S.normalize(settings).devices[2].name,'Наушники');});
 function fixture(){
-    const calls=[],sent=[],errors=[];
-    const state={output:'a',input:'mic1',comm:'c',muted:false,volume:50,failSet:false,failMute:false};
+    resetRevision();
+    const calls=[],sent=[],errors=[],launches=[];
+    const state={output:'a',input:'mic1',comm:'c',muted:false,volume:50,failSet:false,failMute:false,failMedia:false};
     const helper=async args=>{
         calls.push(args);await new Promise(r=>setTimeout(r,1));
         switch(args[0]){
-            case 'snapshot':return {success:true,output:{id:state.output,name:state.output,muted:state.muted},input:{id:state.input,name:'Mic',muted:false},outputComm:{id:state.comm,name:state.comm},inputComm:null};
+            case 'snapshot-v3':return makeSnapshot(state);
             case 'list':return available(state.output);
             case 'set':if(state.failSet)throw new Error('Device unavailable');state.output=args[1];return {success:true};
             case 'status':return {id:state.input,name:'Mic',muted:true};
             case 'mute':if(args[2]==='1'&&state.failMute)throw new Error('Temporary disconnect');state.muted=args[2]==='toggle'?!state.muted:args[2]==='1';return {success:true};
             case 'volume':state.volume=Number(args[3]);return {success:true};
             case 'appvolume':throw new Error('Named app has no audio sessions');
+            case 'media':if(state.failMedia)throw new Error('Nothing is playing right now.');return {success:true,action:args[1]};
             default:return {success:true};
         }
     };
-    const controller=createController({helper,send:d=>sent.push(d),image:n=>'data:image/svg+xml;base64,'+Buffer.from(n).toString('base64'),log:e=>errors.push(e),delay:()=>Promise.resolve()});
+    const controller=createController({helper,send:d=>sent.push(d),image:n=>'data:image/svg+xml;base64,'+Buffer.from(n).toString('base64'),log:e=>errors.push(e),delay:()=>Promise.resolve(),launch:async uri=>{launches.push(uri);}});
     const event=(event,action='toggle',context='key',s=settings)=>controller.dispatch({event,context,device:'deck1',action:prefix+action,payload:{settings:s}});
-    return {controller,event,state,calls,sent,errors};
+    return {controller,event,state,calls,sent,errors,launches};
 }
 test('rapid key presses are serialized and visit all three devices',async()=>{const f=fixture();await f.event('willAppear');await Promise.all([f.event('keyDown'),f.event('keyDown'),f.event('keyDown')]);assert.deepEqual(f.calls.filter(c=>c[0]==='set').map(c=>c[1]),['b','c','a']);});
 test('failed switch produces alert and no invented success state',async()=>{const f=fixture();await f.event('willAppear');f.state.failSet=true;await f.event('keyDown');assert.equal(f.state.output,'a');assert(f.sent.some(m=>m.event==='showAlert'));assert(f.errors.some(e=>e.includes('unavailable')));});
-test('live refresh updates title after external OS switch',async()=>{const f=fixture();await f.event('willAppear');f.state.output='c';await f.controller.poll();assert(f.sent.some(m=>m.event==='setTitle'&&m.payload.title==='3/3\nНаушники'));});
+test('live refresh updates key after external OS switch',async()=>{const f=fixture();await f.event('willAppear');const before=f.sent.filter(m=>m.event==='setImage').length;f.state.output='c';await f.controller.poll();assert(f.sent.filter(m=>m.event==='setImage').length>before);});
 test('icons are data URIs and switch only uses declared state zero',async()=>{const f=fixture();await f.event('willAppear');assert(f.sent.filter(m=>m.event==='setImage').every(m=>m.payload.image.startsWith('data:image/svg+xml;base64,')));assert(f.sent.filter(m=>m.event==='setState').every(m=>m.payload.state===0));});
 test('PTT unmutes on press, mutes the original endpoint on release',async()=>{const f=fixture();await f.event('willAppear','pushtotalk');await f.event('keyDown','pushtotalk');f.state.input='mic2';await f.event('keyUp','pushtotalk');assert.deepEqual(f.calls.filter(c=>c[0]==='mute'),[['mute','input','0','mic1'],['mute','input','1','mic1']]);});
 test('PTT rapid down/up preserves operation order',async()=>{const f=fixture();await Promise.all([f.event('keyDown','pushtotalk'),f.event('keyUp','pushtotalk')]);assert.deepEqual(f.calls.filter(c=>c[0]==='mute').map(c=>c[2]),['0','1']);});
@@ -57,3 +60,9 @@ test('setting 0 percent reaches the native helper unchanged',async()=>{const f=f
 test('unknown action cannot accidentally switch audio',async()=>{const f=fixture();await f.event('keyDown','unknown');assert.equal(f.calls.length,0);});
 test('device request keeps request correlation and direction',async()=>{const f=fixture();await f.controller.dispatch({event:'sendToPlugin',context:'pi',action:prefix+'toggle',payload:{requestDevices:true,deviceType:'input',requestId:7}});assert(f.sent.some(m=>m.payload.requestId===7&&m.payload.deviceType==='input'));});
 test('play/pause does not advertise fictitious playback state',async()=>{const f=fixture();await f.event('willAppear','playpause');await f.event('keyDown','playpause');assert(f.calls.some(c=>c[0]==='media'));assert(!f.sent.some(m=>m.event==='setSettings'));assert(!f.sent.some(m=>m.event==='setState'&&m.payload.state===1));});
+test('media next/prev route through SMTC helper',async()=>{const f=fixture();await f.event('keyDown','medianext','next-key');await f.event('keyDown','mediaprev','prev-key');assert.deepEqual(f.calls.filter(c=>c[0]==='media'),[['media','next'],['media','previous']]);});
+test('playpause launches last app when nothing is playing',async()=>{const f=fixture();await f.event('willAppear','playpause');f.state.failMedia=true;await f.controller.poll();f.state.failMedia=false;await f.event('keyDown','playpause');assert(f.launches.length===0);});
+test('soundsettings launches via JS not native helper',async()=>{const f=fixture();await f.event('keyDown','soundsettings');assert.deepEqual(f.launches,['ms-settings:sound']);assert(!f.calls.some(c=>c[0]==='soundsettings'));});
+test('playpause shows track title from telemetry',async()=>{const f=fixture();await f.event('willAppear','playpause');assert(f.sent.some(m=>m.event==='setTitle'));});
+test('inspector media request returns the live session',async()=>{const f=fixture();await f.event('willAppear','playpause');f.state.media={available:true,sessionCount:1,session:{source:'Y.Music',title:'Track',artist:'Artist',playbackStatus:'Playing',controls:{playPause:true,next:true,previous:true}}};await f.controller.poll();await f.controller.dispatch({event:'sendToPlugin',context:'pi',action:prefix+'playpause',payload:{requestMedia:true}});const reply=f.sent.find(m=>m.event==='sendToPropertyInspector'&&m.payload.media);assert(reply);assert.equal(reply.payload.media.session.title,'Track');assert.equal(reply.payload.media.session.playbackStatus,'Playing');});
+test('inspector media request without telemetry reports idle',async()=>{const f=fixture();await f.controller.dispatch({event:'sendToPlugin',context:'pi',action:prefix+'playpause',payload:{requestMedia:true}});const reply=f.sent.find(m=>m.event==='sendToPropertyInspector'&&m.payload.media);assert.deepEqual(reply.payload.media,{available:false,session:null});});

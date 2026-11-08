@@ -1,8 +1,8 @@
-# Audio Switch Pro 1.4.0
+# Audio Switch Pro 2.0.0
 
 Windows **StreamDock** audio control. This is not an Elgato Stream Deck installer.
 
-Extract the complete `AudioSwitch-1.4.0-StreamDock.zip`, exit StreamDock from its tray icon,
+Extract the complete `AudioSwitch-2.0.0-StreamDock.zip`, exit StreamDock from its tray icon,
 and run `Install-StreamDock.bat` as your normal Windows user. Restart StreamDock and choose
 one or more local audio endpoints in the Audio Switch inspector. No developer tools,
 NirCmd, separate Node.js installation or downloads are needed by the end user.
@@ -24,14 +24,25 @@ PTT unmutes on key-down and mutes the same endpoint on release. Cleanup runs on 
 loss, host disconnect and graceful shutdown, with retry after a failed release. Force-killing
 processes, unavailable audio endpoints and power loss cannot be made fail-safe by this plugin.
 Before the first press PTT does not automatically change microphone mute state.
-Media keys are not playback-state telemetry; Play/Pause intentionally uses a static icon.
+
+Media buttons need no configuration. Play/Pause, Next and Previous control the app that is
+actually playing, through Windows System Media Transport Controls — including UWP apps such as
+Yandex.Music. The track title appears on the Play/Pause key, and its inspector shows the current
+track, artist and app live. If nothing is playing, Play/Pause reopens the last music app seen
+during this StreamDock session and retries. Apps that do not expose media controls report an
+explicit error instead of sending blind keystrokes.
+
+If antivirus quarantines `AudioSwitch.exe`, the plugin shows a clear reinstall/quarantine message.
+The installer rolls back if the helper disappears during installation. You can restore the file
+from Windows Security → Protection history, or add an exclusion for the plugin folder yourself;
+the installer never changes antivirus settings.
 
 Applications pinned to a specific device, ASIO and exclusive streams may not follow default
 endpoint changes. Endpoint IDs are local to a Windows installation and may change after driver
 reinstallation. Imported profiles must select devices on the new machine. Windows IPolicyConfig
 is undocumented, so compatibility with every future Windows build is not guaranteed.
 
-Developers: Windows + Node.js 20/npm + .NET Framework compiler, then `prepare-release.bat`.
+Developers: Windows + Node.js 20/npm + Python 3 + .NET Framework compiler, then `prepare-release.bat`.
 The build uses the lockfile, compiles the helper, runs regression tests, checks manifest assets,
 and emits a complete ZIP into `dist/`. `Install-StreamDock.ps1 -ValidateOnly` checks an extracted
 release without installing. SHA-256 checksums detect corruption; they are not a publisher signature.

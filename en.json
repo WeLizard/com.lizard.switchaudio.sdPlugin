@@ -1,6 +1,6 @@
 {
   "Name": "Audio Switch Pro",
-  "Description": "Switch both Default and Communication audio devices with one click (sets device for calls, Discord, Teams, etc.)",
+  "Description": "Switch Windows audio devices, control mute and volume, and drive the app that is actually playing — no configuration needed for media.",
   "Category": "Audio",
   "com.lizard.switchaudio.toggle": {
     "Name": "Audio Switch",
@@ -32,15 +32,15 @@
   },
   "com.lizard.switchaudio.playpause": {
     "Name": "Play / Pause",
-    "Tooltip": "Toggle media play/pause"
+    "Tooltip": "Play or pause whatever is playing right now — works with any app, no setup needed"
   },
   "com.lizard.switchaudio.medianext": {
     "Name": "Next Track",
-    "Tooltip": "Skip to next track"
+    "Tooltip": "Skip to the next track in the app that is playing"
   },
   "com.lizard.switchaudio.mediaprev": {
     "Name": "Previous Track",
-    "Tooltip": "Go to previous track"
+    "Tooltip": "Go back to the previous track in the app that is playing"
   },
   "com.lizard.switchaudio.pushtotalk": {
     "Name": "Push to Talk",

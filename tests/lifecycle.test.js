@@ -2,11 +2,13 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {createController}=require('../plugin/main');
+const {makeSnapshot,resetRevision}=require('./fixtures');
 function fixture(){
+    resetRevision();
     let current='mic1'; const calls=[],fail=new Set();
     const controller=createController({send:()=>{},image:()=>'',log:()=>{},helper:async args=>{
         calls.push(args);
-        if(args[0]==='snapshot')return {success:true};
+        if(args[0]==='snapshot-v3')return makeSnapshot({input:current});
         if(args[0]==='status')return {id:current};
         if(args[0]==='mute'&&args[2]==='1'&&fail.has(args[3]))throw new Error('Endpoint offline');
         return {success:true};
@@ -28,7 +30,8 @@ test('a failed retry cannot starve pending releases for another microphone',asyn
     assert.equal(f.calls.filter(c=>c[0]==='mute'&&c[2]==='1'&&c[3]==='mic2').length,2);
 });
 test('disabled device title uses a portable empty string, not null',async()=>{
-    const messages=[];const controller=createController({send:m=>messages.push(m),image:()=>'',helper:async()=>({success:true,output:{id:'a',name:'Speakers'}})});
+    resetRevision();
+    const messages=[];const controller=createController({send:m=>messages.push(m),image:()=>'',helper:async args=>args[0]==='snapshot-v3'?makeSnapshot({devices:['a']}):{success:true}});
     await controller.dispatch({event:'willAppear',context:'key',action:'com.lizard.switchaudio.toggle',payload:{settings:{devices:[{id:'a'}],showDeviceName:false}}});
     assert(messages.some(m=>m.event==='setTitle'&&m.payload.title===''));
 });

@@ -184,10 +184,10 @@
   "CategoryIcon": "images/icon",
   "CodePath": "plugin/main.js",
   "CodePathWin": "plugin/main.js",
-  "Description": "Cycle through configured Windows audio devices; native mute, volume and media controls.",
+  "Description": "Switch Windows audio devices, control mute and volume, and drive the app that is actually playing — no configuration needed for media.",
   "Name": "Audio Switch Pro",
   "Icon": "images/icon",
-  "Version": "1.5.1",
+  "Version": "2.0.0",
   "URL": "https://github.com/WeLizard/com.lizard.switchaudio.sdPlugin",
   "DefaultLocale": "en",
   "OS": [

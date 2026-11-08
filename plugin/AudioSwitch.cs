@@ -142,14 +142,13 @@ namespace AudioSwitch
         [PreserveSig] int GetVolumeRange(out float min, out float max, out float increment);
     }
     partial class Program {
-        const string Version = "1.5.0";
+        const string Version = "2.0.0";
         static PropertyKey FriendlyName = new PropertyKey(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
         static readonly Guid VolumeGuid = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
         static readonly Guid SessionGuid = new Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
         [DllImport("ole32.dll")] static extern int PropVariantClear(ref PropVariant variant);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
-        [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
         static void Hr(int result) { Marshal.ThrowExceptionForHR(result); }
         static void Release(object value) { if (value != null && Marshal.IsComObject(value)) Marshal.ReleaseComObject(value); }
         static string Q(string value) {
@@ -213,7 +212,6 @@ namespace AudioSwitch
                 d = Device(e, flow, id); v = Volume(d); return Status(d, v);
             } finally { Release(v); Release(d); Release(e); }
         }
-        static string MaybeStatus(int flow, int role) { try { return ReadStatus(flow, null, role); } catch { return "null"; } }
         static string ListDevices(int flow) {
             IMMDeviceEnumerator e = null; IMMDeviceCollection collection = null;
             try {
@@ -313,23 +311,6 @@ namespace AudioSwitch
             if (changed == 0) throw new InvalidOperationException("No active audio sessions found for the requested application.");
             return "{\"success\":true,\"sessions\":" + changed + "}";
         }
-        static bool Running(string name) {
-            Process[] processes = Process.GetProcessesByName(CleanProcess(name));
-            bool found = processes.Length > 0; foreach (Process p in processes) p.Dispose(); return found;
-        }
-        static string Launch(string path) {
-            if (String.IsNullOrWhiteSpace(path) || path.IndexOfAny(new char[] { '\r', '\n', '\0' }) >= 0) throw new ArgumentException("Invalid application path.");
-            // ShellExecute receives one file/URI, not a cmd.exe command string.
-            var info = new ProcessStartInfo { FileName = path, UseShellExecute = true };
-            using (Process p = Process.Start(info)) { }
-            return "{\"success\":true}";
-        }
-        static string Media(string action) {
-            byte key;
-            switch (action) { case "playpause": key = 0xB3; break; case "next": key = 0xB0; break; case "previous": key = 0xB1; break; default: throw new ArgumentException("Unknown media key."); }
-            keybd_event(key, 0, 0, UIntPtr.Zero); keybd_event(key, 0, 2, UIntPtr.Zero);
-            return "{\"success\":true}";
-        }
         static string SelfTest() {
             if (Q("a\"\\\n\t") != "\"a\\\"\\\\\\u000a\\u0009\"") throw new Exception("JSON escaping failed");
             if (Flow("input") != 1 || Flow("output") != 0) throw new Exception("Direction mapping failed");
@@ -347,21 +328,20 @@ namespace AudioSwitch
             try {
                 string result;
                 if (args.Length == 1 && args[0] == "watch") return Watch();
-                if (args.Length == 1 && args[0] == "snapshot-v2") result = SnapshotV2();
+                if (args.Length == 1 && args[0] == "snapshot-v3") result = SnapshotV3();
                 else if (args.Length == 1 && args[0] == "telemetry-selftest") result = TelemetrySelfTest();
                 else if (args.Length == 1 && args[0] == "selftest") result = SelfTest();
                 else if (args.Length == 1 && args[0] == "version") result = "{\"success\":true,\"version\":" + Q(Version) + "}";
-                else if (args.Length == 1 && args[0] == "snapshot") result = "{\"success\":true,\"output\":" + MaybeStatus(0, 0) + ",\"input\":" + MaybeStatus(1, 0) + ",\"outputComm\":" + MaybeStatus(0, 2) + ",\"inputComm\":" + MaybeStatus(1, 2) + "}";
                 else if (args.Length == 2 && args[0] == "list") result = ListDevices(Flow(args[1]));
                 else if ((args.Length == 2 || args.Length == 3) && args[0] == "status") result = ReadStatus(Flow(args[1]), args.Length == 3 ? args[2] : null, 0);
                 else if ((args.Length == 3 || args.Length == 4) && args[0] == "set") result = SetDevice(args[1], Flow(args[2]), args.Length == 4 ? args[3] : "all");
                 else if ((args.Length == 3 || args.Length == 4) && args[0] == "mute") result = ChangeEndpoint(Flow(args[1]), args.Length == 4 ? args[3] : null, "", args[2], true);
                 else if ((args.Length == 4 || args.Length == 5) && args[0] == "volume") result = ChangeEndpoint(Flow(args[1]), args.Length == 5 ? args[4] : null, args[2], args[3], false);
                 else if (args.Length == 3 && args[0] == "appvolume") result = AppVolume(args[1], Number(args[2], -1, 1));
-                else if (args.Length == 2 && args[0] == "running") result = "{\"success\":true,\"running\":" + Bool(Running(args[1])) + "}";
-                else if (args.Length == 2 && args[0] == "launch") result = Launch(args[1]);
-                else if (args.Length == 1 && args[0] == "soundsettings") result = Launch("ms-settings:sound");
-                else if (args.Length == 2 && args[0] == "media") result = Media(args[1]);
+                else if (args.Length == 1 && args[0] == "media") result = MediaStatus();
+                else if (args.Length == 1 && args[0] == "media-sessions") result = MediaSessions();
+                else if (args.Length == 1 && args[0] == "media-selftest") result = MediaSelfTest();
+                else if (args.Length == 2 && args[0] == "media") result = MediaCommand(args[1]);
                 else throw new ArgumentException("Unknown command or wrong number of arguments.");
                 Console.WriteLine(result); return 0;
             } catch (Exception ex) {

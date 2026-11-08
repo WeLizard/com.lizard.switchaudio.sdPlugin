@@ -1,7 +1,8 @@
 # Isolated fixture: never touches the runner's real StreamDock user profile.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
-$bundle = Join-Path $repo 'dist\AudioSwitch-1.4.0-StreamDock'
+$version = (Get-Content -LiteralPath (Join-Path $repo 'manifest.json') -Raw | ConvertFrom-Json).Version
+$bundle = Join-Path $repo ('dist\AudioSwitch-' + $version + '-StreamDock')
 $originalAppData = $env:APPDATA
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('AudioSwitch test ' + [char]0x0416 + ' ' + [Guid]::NewGuid().ToString('N'))
 try {
@@ -12,7 +13,7 @@ try {
     $plugin = Join-Path $hostRoot 'plugins\com.lizard.switchaudio.sdPlugin'
     if (!(Test-Path -LiteralPath (Join-Path $plugin 'plugin\AudioSwitch.exe'))) { throw 'Fresh installation is incomplete.' }
     $manifest = Get-Content -LiteralPath (Join-Path $plugin 'manifest.json') -Raw | ConvertFrom-Json
-    if ($manifest.Version -ne '1.4.0') { throw 'Wrong installed version.' }
+    if ($manifest.Version -ne $version) { throw 'Wrong installed version.' }
     Set-Content -LiteralPath (Join-Path $plugin 'previous-version-marker.txt') -Value 'Keep this in backup'
     & (Join-Path $bundle 'Install-StreamDock.ps1')
     if (Test-Path -LiteralPath (Join-Path $plugin 'previous-version-marker.txt')) { throw 'Upgrade did not replace the folder cleanly.' }

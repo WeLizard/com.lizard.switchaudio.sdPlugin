@@ -1,6 +1,6 @@
 {
   "Name": "Audio Switch Pro",
-  "Description": "一键切换默认和通讯音频设备（设置通话、Discord、Teams等的设备）",
+  "Description": "切换 Windows 音频设备、控制静音和音量，并控制正在播放的应用——媒体控制无需设置。",
   "Category": "音频",
   "com.lizard.switchaudio.toggle": {
     "Name": "切换音频",
@@ -32,15 +32,15 @@
   },
   "com.lizard.switchaudio.playpause": {
     "Name": "播放/暂停",
-    "Tooltip": "切换播放/暂停"
+    "Tooltip": "播放或暂停当前内容，适用于任何应用，无需设置"
   },
   "com.lizard.switchaudio.medianext": {
     "Name": "下一曲",
-    "Tooltip": "跳到下一曲"
+    "Tooltip": "跳到正在播放应用的下一曲"
   },
   "com.lizard.switchaudio.mediaprev": {
     "Name": "上一曲",
-    "Tooltip": "返回上一曲"
+    "Tooltip": "返回正在播放应用的上一曲"
   },
   "com.lizard.switchaudio.pushtotalk": {
     "Name": "按键通话",
